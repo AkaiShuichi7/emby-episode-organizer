@@ -1,0 +1,8 @@
+T6 命名模板
+
+- 新增 backend/app/utils/naming.py
+- 新增 backend/tests/test_naming.py
+- 验证: uv run pytest tests/test_naming.py -v ✅
+- 验证: uv run ruff check . ✅
+- 验证: uv run mypy app ✅
+- lsp_diagnostics: naming.py / test_naming.py 无诊断

@@ -65,3 +65,15 @@
 - round-trip 用 pydantic `BaseModel.__eq__` 即可，无需手写 `assert dict == dict`。
 - `_int_or_none` / `_float_or_none` 防御性 `try/except ValueError`，避免脏 NFO 拖垮上层；缺字段/解析失败统一返回 None。
 - mypy strict 下 `Optional[X]` 触发 ruff UP045（推荐 `X | None`），一次性 `--fix` 全转。
+
+## T6 命名模板
+- 命名上下文统一收敛到 `NamingContext(series, season, episode, title, ext)`。
+- 视频名先做 `sanitize_series_name` + `sanitize_filename`，再套 `{series} - S{season:02d}E{episode:02d} - {title}{ext}`。
+- NFO / thumb / season folder 只做模板拼接，保持格式稳定。
+- `:02d` 只补零，不会截断 `100` 这种三位集数。
+
+## T9 日志配置
+- stdlib logging 足够：`logging` + `json` + `logging.handlers.RotatingFileHandler`。
+- JSON 日志固定一行，字段收敛为 `ts/level/logger/msg/module/func/line`，测试只断言前四个必需键。
+- `setup_logging` 必须先清理 root 旧 handler，再挂控制台和文件 handler，避免重复初始化叠日志。
+- 测试里要用 root logger 还原 fixture，避免 handler 泄漏污染其它用例。
