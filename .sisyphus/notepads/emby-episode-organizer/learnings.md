@@ -77,3 +77,10 @@
 - JSON 日志固定一行，字段收敛为 `ts/level/logger/msg/module/func/line`，测试只断言前四个必需键。
 - `setup_logging` 必须先清理 root 旧 handler，再挂控制台和文件 handler，避免重复初始化叠日志。
 - 测试里要用 root logger 还原 fixture，避免 handler 泄漏污染其它用例。
+
+## T8 封面下载器
+- httpx `client.stream("GET", url, timeout=...)` 的 timeout 触发后，TimeoutException 会在 stream context 内部抛出；必须在内层 try 捕获并转 CoverTimeoutError。
+- respx 的 `side_effect=handler` 不会延迟响应——respx 同步构造 Response 后立刻返回。要在测试里触发 timeout，必须直接 `side_effect=httpx.TimeoutException(...)`，不能用 sleep 模拟。
+- httpx `client.stream` 必须用 `async with` 退出；`aiter_bytes` 迭代完成后才退出 stream context。如果中途抛异常，stream context 会再次抛，需要外层 try/finally 接住。
+- Pillow `Image.verify()` 不解码像素，只校验结构，比 `Image.open().load()` 快 10x+；坏图通常抛 `UnidentifiedImageError` 或 `OSError/SyntaxError`。
+- Pillow 已装 12.2.0 (Py3.12 arm64 macOS wheel 完整)，无需编译。

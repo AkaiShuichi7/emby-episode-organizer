@@ -1,0 +1,24 @@
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 12 items
+
+tests/test_cover.py::test_download_jpeg_success PASSED                   [  8%]
+tests/test_cover.py::test_download_png_success PASSED                    [ 16%]
+tests/test_cover.py::test_too_large_raises_and_cleans_partial PASSED     [ 25%]
+tests/test_cover.py::test_html_content_type_rejected PASSED              [ 33%]
+tests/test_cover.py::test_octet_stream_content_type_rejected PASSED      [ 41%]
+tests/test_cover.py::test_timeout_raises_cover_timeout PASSED            [ 50%]
+tests/test_cover.py::test_file_scheme_rejected PASSED                    [ 58%]
+tests/test_cover.py::test_ftp_scheme_rejected PASSED                     [ 66%]
+tests/test_cover.py::test_lan_ip_allowed PASSED                          [ 75%]
+tests/test_cover.py::test_corrupted_image_cleans_up PASSED               [ 83%]
+tests/test_cover.py::test_allowed_content_types_constant PASSED          [ 91%]
+tests/test_cover.py::test_no_http_request_made_for_invalid_scheme PASSED [100%]
+
+============================== 12 passed in 0.16s ==============================
+---ruff---
+All checks passed!
+---mypy---
+Success: no issues found in 14 source files
