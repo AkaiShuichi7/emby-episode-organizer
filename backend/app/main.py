@@ -13,6 +13,8 @@ from app.api.v1 import settings as _v1_settings  # noqa: F401
 from app.api.v1 import emby as _v1_emby  # noqa: F401
 from app.api.v1 import libraries as _v1_libraries  # noqa: F401
 from app.api.v1 import series as _v1_series  # noqa: F401
+from app.api.v1 import tasks as _v1_tasks  # noqa: F401
+from app.api.v1 import files as _v1_files  # noqa: F401
 from app.api.v1 import api_v1_router
 from app.config import settings
 from app.db.init_db import init_db

@@ -1,0 +1,18 @@
+Task 18 evidence
+
+Files added:
+- backend/app/schemas/task.py
+- backend/app/api/v1/tasks.py
+- backend/app/api/v1/files.py
+- backend/tests/api/test_tasks_api.py
+- backend/tests/api/test_files_api.py
+
+Files changed:
+- backend/app/main.py
+
+Verification:
+- `cd backend && ./.venv/bin/python -m pytest tests/api/test_tasks_api.py tests/api/test_files_api.py -v` -> 17 passed
+- `cd backend && ./.venv/bin/python -m pytest -q` -> 167 passed
+- `cd backend && ./.venv/bin/ruff check .` -> All checks passed
+- `cd backend && ./.venv/bin/mypy app` -> Success: no issues found in 31 source files
+- LSP diagnostics (error severity) on changed files -> none

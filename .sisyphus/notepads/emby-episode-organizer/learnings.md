@@ -146,3 +146,11 @@
 - GET 列表可选 ?library_id= 过滤，用 Query(default=None) + select.where 条件拼接。
 - 子路由自挂载 + main.py +1 import (T16 模式照抄)：`from app.api.v1 import series as _v1_series  # noqa: F401`。
 - 测试 fixture 与 T16 完全一致（覆写 file.allowed_browse_roots = [tmp_path]），series 测试先 POST /libraries 建 library 再测 series 路径校验。
+
+## T18 Tasks API + Files API
+- tasks/files 路由继续沿用 "子模块底部 `api_v1_router.include_router(router)` + main.py 显式 import 触发" 模式；main.py 只需新增 tasks/files 两行 import。
+- 任务路径计算统一走 `NamingContext + generate_video_filename/generate_nfo_filename/generate_thumb_filename + generate_season_folder`：staging 直接落 series.staging_path，target 多一层 `Season XX`。
+- preview 支持 `episode_number=None`：此时只返回基础字段，六个 staging/target 路径统一给 `None`，避免伪造文件名。
+- create 先校验 source_file_path 在 `file.allowed_browse_roots` 内且是视频，再写 staging 视频/NFO/可选封面；v1 状态简化为 `draft -> staged -> committed`，无 NFO 时保留 `draft`，有落盘产物后进 `staged`。
+- commit 不要盲信 `staging_cover_path` 非空；需只提交真实存在的 staging 文件，否则无封面任务会因缺失 thumb 路径提交失败。
+- files API 只包一层 HTTP 语义：`browse_directory` / `validate_source_file` 的 `PathSecurityError`、`FileNotFoundError`、`NotAVideoError` 统一转 400，响应直接透传 service 的 pydantic `model_dump(mode="json")`。
