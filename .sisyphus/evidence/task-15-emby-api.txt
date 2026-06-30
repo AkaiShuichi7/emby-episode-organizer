@@ -1,0 +1,67 @@
+T15 - Emby API routes (test, libraries, search, seasons, episodes, latest)
+=====================================================================
+
+任务范围:
+- 创建 backend/app/api/v1/emby.py（Emby 集成路由）
+- 创建 backend/tests/api/test_emby_api.py（9 个端到端测试）
+- main.py 追加一行 `from app.api.v1 import emby as _v1_emby` 触发子模块自挂载
+  （D16: 子模块不在 v1/__init__.py 主动 import，由 main.py 显式 import 触发）
+
+文件清单:
+- 新增: backend/app/api/v1/emby.py
+- 新增: backend/tests/api/test_emby_api.py
+- 修改: backend/app/main.py（追加 emby 子模块 import 一行；T14 已挂载 api_v1_router）
+
+端点:
+- POST /api/v1/emby/test          EmbyTestRequest/Response
+- GET  /api/v1/emby/libraries     list[EmbyLibrary]
+- GET  /api/v1/emby/series/search?keyword=...  list[EmbySeries]
+- GET  /api/v1/emby/series/{id}/seasons          list[EmbySeason]
+- GET  /api/v1/emby/series/{id}/seasons/{n}/episodes  list[EmbyEpisode]
+- GET  /api/v1/emby/series/{id}/seasons/{n}/latest   {latest_episode, next_episode}
+
+Pydantic 模型:
+- EmbyTestRequest(server_url, api_key)
+- EmbyTestResponse(success, message, server_name=None)
+- ErrorResponse(success=False, message, detail=None)
+- LatestEpisodeResponse(latest_episode, next_episode)
+
+依赖:
+- get_emby_config（deps.py 已就绪）
+- EmbyClient（services/emby.py 已就绪）
+- EmbyConfig（services/settings.py 已就绪）
+
+错误处理约定:
+- 业务错（未配置 Emby）→ 400 + {success:false, message, detail}
+- /test 鉴权/连接失败 → 200 + {success:false, message}（前端按 success 判定）
+- 未预期异常 → 500 + {success:false, message:"未知错误", detail:str(e)}
+
+证据:
+---------------------------------------------------------------------
+[pytest tests/api/test_emby_api.py -v]
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+collected 9 items
+
+tests/api/test_emby_api.py::test_post_test_returns_success_when_connected PASSED
+tests/api/test_emby_api.py::test_post_test_returns_api_key_error_on_401 PASSED
+tests/api/test_emby_api.py::test_post_test_returns_connection_error_on_network_failure PASSED
+tests/api/test_emby_api.py::test_libraries_returns_400_when_emby_not_configured PASSED
+tests/api/test_emby_api.py::test_libraries_returns_two_libraries_when_configured PASSED
+tests/api/test_emby_api.py::test_series_search_returns_matches PASSED
+tests/api/test_emby_api.py::test_series_seasons_returns_list PASSED
+tests/api/test_emby_api.py::test_series_episodes_returns_list PASSED
+tests/api/test_emby_api.py::test_series_latest_returns_latest_and_next PASSED
+
+============================== 9 passed in 0.47s ==============================
+
+[pytest 全量]
+============================= 125 passed in 1.08s ==============================
+
+[ruff check .]
+All checks passed!
+
+[mypy app]
+Success: no issues found in 23 source files
