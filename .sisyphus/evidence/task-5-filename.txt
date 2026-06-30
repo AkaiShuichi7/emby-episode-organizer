@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 10 items
+
+tests/test_filename.py::test_sanitize_filename_replaces_illegal_chars PASSED [ 10%]
+tests/test_filename.py::test_sanitize_filename_keeps_chinese PASSED      [ 20%]
+tests/test_filename.py::test_sanitize_filename_collapses_spaces PASSED   [ 30%]
+tests/test_filename.py::test_sanitize_filename_strips_outer_spaces PASSED [ 40%]
+tests/test_filename.py::test_sanitize_filename_pure_special_returns_untitled PASSED [ 50%]
+tests/test_filename.py::test_sanitize_filename_preserves_brackets_and_dashes PASSED [ 60%]
+tests/test_filename.py::test_sanitize_series_name_strips_dot PASSED      [ 70%]
+tests/test_filename.py::test_sanitize_series_name_keeps_chinese PASSED   [ 80%]
+tests/test_filename.py::test_get_file_extension_lowercase_with_dot PASSED [ 90%]
+tests/test_filename.py::test_is_video_file_whitelist PASSED              [100%]
+
+============================== 10 passed in 0.01s ==============================
