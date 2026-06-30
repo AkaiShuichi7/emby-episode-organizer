@@ -1,0 +1,7 @@
+Task 2 toolchain evidence
+
+- Project metadata: name=emby-episode-organizer-backend, version=0.1.0, requires-python=>=3.12
+- Dependencies: fastapi, uvicorn[standard], sqlalchemy, aiosqlite, httpx, pydantic, pydantic-settings, python-multipart
+- Dev deps: pytest, pytest-asyncio, pytest-cov, respx, ruff, mypy
+- Ruff: line-length=100, target-version=py312, select E/F/I/N/W/UP/B/C4/SIM, ignore E501
+- Mypy: strict=True, disallow_untyped_defs=True, ignore_missing_imports=True

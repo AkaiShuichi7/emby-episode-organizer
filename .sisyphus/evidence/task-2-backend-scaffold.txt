@@ -1,0 +1,8 @@
+Task 2 backend scaffold evidence
+
+- Files created: backend/pyproject.toml, backend/ruff.toml, backend/mypy.ini, backend/.python-version, backend/app/__init__.py, backend/app/main.py, backend/tests/__init__.py, backend/tests/test_health.py, backend/README.md
+- Python venv: created with python3.12
+- Test: pytest -v -> 1 passed
+- Lint: ruff check . -> all checks passed
+- Type check: mypy . -> success, no issues found in 4 source files
+- Health check: uvicorn app.main:app --port 8899 + curl /health -> {"status":"ok"}
