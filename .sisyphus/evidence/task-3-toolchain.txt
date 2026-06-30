@@ -1,0 +1,10 @@
+任务 3 工具链证据
+
+- npm run lint: 成功
+- npx vue-tsc --noEmit: 成功
+- lsp_diagnostics: frontend 目录 error=0
+
+补丁说明:
+- frontend/.gitignore 解决 eslint ignore-path 读取失败
+- frontend/src/env.d.ts 解决 .vue 模块声明
+- frontend/vite.config.ts 与 frontend/vitest.config.ts 增加 Naive UI preset.css alias

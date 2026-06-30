@@ -1,0 +1,18 @@
+任务 3 前端骨架证据
+
+- 目录: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/frontend
+- npm install: added 418 packages; 再次安装 added 3 packages
+- npm run build: 成功
+- npm run test:unit -- --run: 1 passed
+
+关键文件:
+- frontend/package.json
+- frontend/vite.config.ts
+- frontend/vitest.config.ts
+- frontend/src/main.ts
+- frontend/src/App.vue
+- frontend/src/router/index.ts
+- frontend/src/views/HomeView.vue
+- frontend/src/__tests__/App.spec.ts
+- frontend/.env.development
+- frontend/.env.production
