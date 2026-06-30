@@ -1,0 +1,20 @@
+Task 11: 文件移动服务
+
+RED:
+- `uv run pytest tests/test_mover.py -v`
+- 结果: 失败，`ImportError: cannot import name 'mover' from 'app.services'`
+
+GREEN:
+- `uv run pytest tests/test_mover.py -v`
+- 结果: 8 passed
+
+验证:
+- `uv run pytest tests/test_mover.py -v && uv run ruff check . && uv run mypy app`
+- 结果:
+  - tests/test_mover.py: 8 passed
+  - ruff: All checks passed!
+  - mypy: Success: no issues found in 17 source files
+
+LSP:
+- backend/app/services/mover.py: No diagnostics found
+- backend/tests/test_mover.py: No diagnostics found

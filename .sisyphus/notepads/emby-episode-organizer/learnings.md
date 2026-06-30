@@ -110,3 +110,30 @@
 - `validate_source_file` 失败优先级：路径不在 allowed_roots → `PathSecurityError`；不存在 → builtin `FileNotFoundError`；是目录 / 扩展名不在白名单 → 自定义 `NotAVideoError`。`PathSecurityError` 必须先于 `exists()` 检查，否则漏白名单校验。
 - `BrowseEntry.modified_at` 用 `datetime.fromtimestamp(stat.st_mtime)`（naive 本地时间），pydantic v2 自动序列化；不需要额外 tz 字段。
 - pydantic 模型 `BrowseEntry` 必须给 `modified_at` 设 `default_factory`，否则 pydantic v2 + mypy strict 会在构造空 dict 时报缺字段。
+
+## T14 Settings API
+- FastAPI 的 `Depends(get_settings_service)` 在参数默认值里调用是官方推荐写法，但 ruff B008 误报；项目级 `ruff.toml` 加 per-file-ignore `["B008"]` 给 `app/main.py` 和 `app/api/**/*.py` 解决。
+- FastAPI 子路由自挂载（模块底部 `api_v1_router.include_router(router)`）+ 主程序 import 触发：避免把子模块硬编码进 v1 包 `__init__.py`，否则会形成 `v1/__init__` ↔ `v1/settings` 循环 import。**main.py 显式 import 各 v1 子模块**是干净的解耦点。
+- `get_settings_service` 抛错发生在依赖解析阶段，**端点 try/except 接不住**；测试兜底用"返回坏 service、其方法抛"的模式：override 返回一个继承 `SettingsService` 但 `get_emby_config` 直接 `raise` 的子类型，错误发生在端点 try 块内被 catch。
+- `SettingsService.set` 走 upsert 但**不 commit**；PUT 端点需 `Depends(get_db)` 拿到同一 session 并 `await db.commit()`，否则 `async with SessionLocal() as session` 关闭时未提交事务回滚 → PUT 后 GET 看不到。FastAPI 对相同依赖去重，`Depends(get_db)` 两次注入拿到同一 session。
+- pydantic v2 的 `RootModel[dict[str, Any]]` 是把"整个 body 就是个 dict"的请求/响应模型的最佳载体；body 取值走 `body.root`。
+- Pydantic `RootModel` 的 OpenAPI schema 把整个对象拍平为 `{type: object}`，不会在 schema 里出现 `root` 字段，前端体验上等价于裸 dict。
+
+## T15 Emby API 路由
+- 业务错误统一返回格式 `{success: false, message: str, detail: str | None}`；不在响应层抛 4xx/5xx 给前端，`/test` 端点全部 200 + `success` 字段判定；只有"未配置 Emby"返回 400（业务前置检查），其它都是 200。
+- FastAPI 路由内 `try/finally + await client.aclose()` 必须包住 EmbyClient 调用，否则长生命周期 httpx 客户端会泄漏（respx 测试间互不干扰，pyright 也会揪）。
+- API 层复用 `get_emby_config` Depends，避免每个端点重写 DB 查询；缺配置直接 `JSONResponse(400, ErrorResponse(...).model_dump())`，响应体不带 `detail` 包裹。
+- 子模块（emby.py）只在文件底部 `api_v1_router.include_router(router)`；要在 main.py 加 `from app.api.v1 import emby as _v1_emby` 触发挂载（T14 已建立模式）。否则路由永远 404。
+- 测试用 `app.dependency_overrides[get_emby_config] = lambda: EmbyConfig(...)` 注入 stub 配置，比往 DB 塞 3 行设置更稳；in-memory SQLite 多连接可能不共享数据。
+- respx `mock(side_effect=httpx.ConnectError(...))` 直接让 respx 抛出 httpx 异常，比手写 sleep 模拟真实超时更准；EmbyClient 把 `httpx.HTTPError` 包成 `EmbyConnectionError`，API 层捕获后转 `{success: false, message: "连接失败"}`。
+- mypy strict 下路由返回值用 `JSONResponse | list[dict[str, Any]]` 联合类型；FastAPI 对 JSONResponse 跳过 response_model 校验，所以 `response_model=list[Any]` 仍然有效。
+- Pydantic v2 `model_dump()` 直接把 PascalCase 字段（ItemId/Name 等）保留输出，前端按 Emby REST API 字段名消费，不用二次 camelCase 转换。
+
+## T16 Libraries CRUD API
+- 路径校验统一走 `app.utils.path_security.safe_resolve` + settings DB 的 `file.allowed_browse_roots`，不在 endpoint 硬编码。空 allowed_roots 视为"未配置"，所有路径校验都失败（不再"默认放行"）。
+- 测试 fixture 用 `app.dependency_overrides[get_db]` 在每次请求中 `init_default_settings` 之后再 `Setting.value = [str(tmp_path)]` 覆写，比单独 override `get_settings_service` 更稳：保留了真实 service 的 session 共享语义，FastAPI 对相同依赖去重，libraries 端点的 `Depends(get_db)` 和 `Depends(get_settings_service)` 拿到同一 session。
+- PATCH 风格更新用 `body.model_dump(exclude_unset=True)` 只把客户端显式传入的字段写到 ORM 上；`exclude_unset=True` vs `exclude_none=True`：前者保留 `false`/`""` 这种"用户明确置空"的语义，后者会把 `false` 当成"未传"漏更新。libraries 的 enabled 默认 True，PUT 改 False 必须用 `exclude_unset=True` 才能落到 ORM。
+- pydantic v2 `model_config = ConfigDict(from_attributes=True)` 让 `LibraryResponse.model_validate(orm_obj)` 直接读 ORM 属性，免去手写 `LibraryResponse(id=library.id, name=library.name, ...)` 模板。
+- ruff C416 嫌 `body.model_dump(...).items()` 包 dict comprehension 多余；直接 `dict(body.model_dump(exclude_unset=True))` 就过。
+- DELETE 端点用 `return Response(status_code=status.HTTP_204_NO_CONTENT)` 显式给空体；不返响应模型，避免 FastAPI 默认 `application/json` 头 + 空数组噪声。
+- 子路由自挂载 + main.py `from app.api.v1 import libraries as _v1_libraries  # noqa: F401` 触发（T15 已建立），新加模块就是 `main.py` +1 行 + 文件底部 `include_router`。

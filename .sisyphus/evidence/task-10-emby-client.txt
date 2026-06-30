@@ -1,0 +1,27 @@
+T10 Emby API 客户端证据
+
+新增文件:
+- backend/app/services/emby.py
+- backend/tests/test_emby_client.py
+- backend/pyrightconfig.json
+
+验证结果:
+1. `cd backend && .venv/bin/python -m pytest tests/test_emby_client.py -v`
+   - 11 passed
+
+2. `cd backend && .venv/bin/mypy app`
+   - Success: no issues found in 16 source files
+
+3. `cd backend && .venv/bin/ruff check .`
+   - FAIL
+   - 既有问题位于 `backend/tests/test_mover.py`
+   - I001 Import block is un-sorted or un-formatted
+   - UP012 Unnecessary call to `encode` as UTF-8
+   - 本任务按约束未修改其它 test 文件
+
+4. LSP diagnostics
+   - backend/app/services/emby.py: clean
+   - backend/tests/test_emby_client.py: clean
+
+备注:
+- 根目录当前不是 git 仓库，未执行要求中的 commit。

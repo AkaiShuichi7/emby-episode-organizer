@@ -1,0 +1,7 @@
+T9 日志配置证据
+
+- 测试：`./.venv/bin/python -m pytest tests/test_logging_config.py -v` 通过，3/3。
+- lint：`./.venv/bin/ruff check .` 通过。
+- 类型：`./.venv/bin/mypy app` 通过。
+- LSP：`backend/app/main.py`、`backend/app/logging_config.py`、`backend/tests/test_logging_config.py` 无诊断。
+- 实现：stdlib `logging` + `json` + `RotatingFileHandler`，JSON 字段含 `ts/level/logger/msg/module/func/line`。
