@@ -1,0 +1,82 @@
+Task 14 - Settings API + 健康检查证据
+========================================
+
+## 1. pytest tests/api/test_settings_api.py -v
+
+$ cd backend && ./.venv/bin/python -m pytest tests/api/test_settings_api.py -v
+
+tests/api/test_settings_api.py::test_get_settings_returns_defaults PASSED
+tests/api/test_settings_api.py::test_put_settings_persists_value PASSED
+tests/api/test_settings_api.py::test_get_settings_masks_api_key PASSED
+tests/api/test_settings_api.py::test_get_settings_without_api_key_does_not_error PASSED
+tests/api/test_settings_api.py::test_put_settings_accepts_complex_value PASSED
+tests/api/test_settings_api.py::test_health_returns_status_ok_with_emby_unconfigured PASSED
+tests/api/test_settings_api.py::test_health_emby_configured_true_after_setup PASSED
+tests/api/test_settings_api.py::test_health_falls_back_when_settings_db_unavailable PASSED
+
+8 passed in 0.36s
+
+## 2. pytest (全量)
+
+$ ./.venv/bin/python -m pytest
+
+============================= 116 passed in 0.87s ==============================
+
+## 3. ruff check .
+
+$ ./.venv/bin/ruff check .
+
+All checks passed!
+
+## 4. mypy app
+
+$ ./.venv/bin/mypy app
+
+Success: no issues found in 22 source files
+
+## 5. QA 场景：uvicorn live curl
+
+$ ./.venv/bin/uvicorn app.main:app --port 8899 &
+
+GET /api/v1/settings (空 DB):
+{}
+
+PUT /api/v1/settings {"emby.server_url":"http://x","emby.api_key":"abcdef123456","emby.auto_refresh":true}:
+{
+    "emby.server_url": "http://x",
+    "emby.api_key": "xxxx****3456",  ← MASK 正确
+    "emby.auto_refresh": true
+}
+
+GET /api/v1/settings (回读):
+{
+    "emby.server_url": "http://x",
+    "emby.api_key": "xxxx****3456",
+    "emby.auto_refresh": true
+}
+
+GET /health:
+{
+    "status": "ok",
+    "db_ok": true,
+    "emby_configured": true
+}
+
+## 6. 交付文件清单
+
+新建:
+- backend/app/api/__init__.py             (包标识)
+- backend/app/api/deps.py                 (依赖注入: get_db / get_settings_service / get_emby_config)
+- backend/app/api/v1/__init__.py          (api_v1_router = APIRouter(prefix="/api/v1"))
+- backend/app/api/v1/settings.py          (GET/PUT /settings + API Key mask)
+- backend/tests/api/__init__.py           (测试子包标识)
+- backend/tests/api/test_settings_api.py  (8 个端到端测试)
+
+修改:
+- backend/app/main.py                     (挂载 api_v1_router + 扩展 /health 三字段)
+- backend/tests/test_health.py            (适配 /health 新响应)
+- backend/ruff.toml                       (B008 per-file-ignore for FastAPI Depends)
+
+未动:
+- backend/app/services/settings.py        (T12 固化)
+- backend/app/db/*, backend/app/config.py (T4/T9 固化)

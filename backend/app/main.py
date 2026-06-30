@@ -1,24 +1,67 @@
 """Emby Episode Organizer 后端 FastAPI 应用入口。"""
 
-from collections.abc import AsyncIterator
+import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from app.api.deps import get_settings_service
+# 导入各 v1 子模块以触发模块底部的自挂载（include_router）
+from app.api.v1 import settings as _v1_settings  # noqa: F401
+from app.api.v1 import api_v1_router
+from app.config import settings
 from app.db.init_db import init_db
+from app.logging_config import setup_logging
+from app.services.settings import SettingsService
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """应用生命周期钩子：启动时初始化数据库表。"""
+    setup_logging(settings.log_dir)
+    logger.info("应用启动")
     await init_db()
+    logger.info("数据库初始化完成")
     yield
 
 
 app = FastAPI(title="Emby Episode Organizer", version="0.1.0", lifespan=lifespan)
 
 
+# 挂载 v1 总路由（子模块在 import 时自挂载）
+app.include_router(api_v1_router)
+
+
 @app.get("/health")
-async def health() -> dict[str, str]:
-    """健康检查端点。"""
-    return {"status": "ok"}
+async def health(
+    service: SettingsService = Depends(get_settings_service),
+) -> dict[str, Any]:
+    """健康检查端点。
+
+    返回三项状态：
+    - ``status``: 进程级存活标志，固定 ``ok``。
+    - ``db_ok``: settings DB 是否可达，异常时降级为 ``False``。
+    - ``emby_configured``: Emby server_url / api_key / auto_refresh 三件套
+      是否齐全，缺失则 ``False``。
+
+    DB 不可达时仍返回 200，避免监控把数据库抖动误判成进程级宕机。
+    """
+    db_ok = True
+    emby_configured = False
+    try:
+        cfg = await service.get_emby_config()
+        emby_configured = cfg is not None
+    except Exception:
+        # 兜底：DB 不可达时仍返回 ok + db_ok=false，让上层有信号区分
+        logger.exception("健康检查读取配置失败，降级返回")
+        db_ok = False
+        emby_configured = False
+    return {
+        "status": "ok",
+        "db_ok": db_ok,
+        "emby_configured": emby_configured,
+    }

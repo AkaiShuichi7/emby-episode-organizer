@@ -6,7 +6,9 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]
 
 [lint.per-file-ignores]
-"app/main.py" = ["I001"]
+# FastAPI Depends() 在参数默认值里调用是官方推荐写法，B008 误报忽略
+"app/main.py" = ["I001", "B008"]
+"app/api/**/*.py" = ["B008"]
 "app/services/nfo.py" = ["UP045", "W292"]
 "tests/test_logging_config.py" = ["I001"]
 "tests/test_nfo.py" = ["W292"]
