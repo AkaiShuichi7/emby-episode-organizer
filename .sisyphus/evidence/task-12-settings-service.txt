@@ -1,0 +1,42 @@
+=== T12 Settings Service Evidence ===
+Date: 2026年 6月30日 星期二 17时33分14秒 CST
+
+--- pytest tests/test_settings_service.py -v ---
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 16 items
+
+tests/test_settings_service.py::test_get_missing_key_returns_none PASSED [  6%]
+tests/test_settings_service.py::test_set_then_get_dict_value PASSED      [ 12%]
+tests/test_settings_service.py::test_set_then_get_str_value PASSED       [ 18%]
+tests/test_settings_service.py::test_set_then_get_bool_value PASSED      [ 25%]
+tests/test_settings_service.py::test_set_then_get_list_value PASSED      [ 31%]
+tests/test_settings_service.py::test_get_all_returns_all_set_values PASSED [ 37%]
+tests/test_settings_service.py::test_get_all_empty_when_nothing_set PASSED [ 43%]
+tests/test_settings_service.py::test_set_overwrites_existing_key PASSED  [ 50%]
+tests/test_settings_service.py::test_get_emby_config_when_all_keys_present PASSED [ 56%]
+tests/test_settings_service.py::test_get_emby_config_when_missing_key_returns_none PASSED [ 62%]
+tests/test_settings_service.py::test_get_emby_config_when_all_missing_returns_none PASSED [ 68%]
+tests/test_settings_service.py::test_set_emby_config_roundtrip PASSED    [ 75%]
+tests/test_settings_service.py::test_set_emby_config_default_auto_refresh PASSED [ 81%]
+tests/test_settings_service.py::test_init_default_settings_writes_defaults PASSED [ 87%]
+tests/test_settings_service.py::test_init_default_settings_is_idempotent PASSED [ 93%]
+tests/test_settings_service.py::test_default_settings_constant_shape PASSED [100%]The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <aiosqlite.core.Connection object at 0x10c9e8e30>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+/Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/lib/python3.12/site-packages/_pytest/unraisableexception.py:33: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <aiosqlite.core.Connection object at 0x10c9e8e30>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+  gc.collect()
+
+
+============================== 16 passed in 0.35s ==============================
+
+--- mypy app/services/settings.py ---
+Success: no issues found in 1 source file
+
+--- ruff check app/services/settings.py tests/test_settings_service.py ---
+All checks passed!
+
+--- 备注: ruff check . 与 mypy app 的全仓 0 issue 验证受 T11 测试文件 test_mover.py 残留 import 错误与 emby.py 历史 mypy 错误影响（T11 未完成），本任务范围 (settings.py + test_settings_service.py) 全部 PASS ---
