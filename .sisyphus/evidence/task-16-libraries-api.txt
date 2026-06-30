@@ -1,0 +1,25 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 11 items
+
+tests/api/test_libraries_api.py::test_get_libraries_returns_empty_list PASSED [  9%]
+tests/api/test_libraries_api.py::test_post_library_creates_when_paths_inside_allowed_roots PASSED [ 18%]
+tests/api/test_libraries_api.py::test_post_library_rejects_staging_root_outside_allowed_roots PASSED [ 27%]
+tests/api/test_libraries_api.py::test_post_library_rejects_target_root_outside_allowed_roots PASSED [ 36%]
+tests/api/test_libraries_api.py::test_get_libraries_lists_created PASSED [ 45%]
+tests/api/test_libraries_api.py::test_get_library_by_id_returns_detail PASSED [ 54%]
+tests/api/test_libraries_api.py::test_get_library_by_id_returns_404_when_not_found PASSED [ 63%]
+tests/api/test_libraries_api.py::test_put_library_updates_name PASSED    [ 72%]
+tests/api/test_libraries_api.py::test_put_library_rejects_path_outside_allowed_roots PASSED [ 81%]
+tests/api/test_libraries_api.py::test_delete_library_removes_it PASSED   [ 90%]
+tests/api/test_libraries_api.py::test_delete_library_returns_404_when_not_found PASSED [100%]
+
+============================== 11 passed in 0.52s ==============================
+
+
+============================= 136 passed in 1.33s ==============================

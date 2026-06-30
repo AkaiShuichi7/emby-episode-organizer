@@ -11,6 +11,7 @@ from app.api.deps import get_settings_service
 # 导入各 v1 子模块以触发模块底部的自挂载（include_router）
 from app.api.v1 import settings as _v1_settings  # noqa: F401
 from app.api.v1 import emby as _v1_emby  # noqa: F401
+from app.api.v1 import libraries as _v1_libraries  # noqa: F401
 from app.api.v1 import api_v1_router
 from app.config import settings
 from app.db.init_db import init_db
