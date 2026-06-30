@@ -137,3 +137,12 @@
 - ruff C416 嫌 `body.model_dump(...).items()` 包 dict comprehension 多余；直接 `dict(body.model_dump(exclude_unset=True))` 就过。
 - DELETE 端点用 `return Response(status_code=status.HTTP_204_NO_CONTENT)` 显式给空体；不返响应模型，避免 FastAPI 默认 `application/json` 头 + 空数组噪声。
 - 子路由自挂载 + main.py `from app.api.v1 import libraries as _v1_libraries  # noqa: F401` 触发（T15 已建立），新加模块就是 `main.py` +1 行 + 文件底部 `include_router`。
+
+## T17 Series CRUD API
+- series 路径校验跟 library 不同：series 的 staging_path 校验在关联 library.staging_root 下、target_path 校验在 library.target_root 下（不是全局 allowed_browse_roots，那是 library 自己的校验层）。用 safe_resolve(path, [Path(library.staging_root)]) 即可，root 为 None → 400。
+- library_id 为 None + 路径非空 → 直接 400（无参照无法校验路径安全）；library_id 非 None 但 DB 查不到 → 400。
+- PUT 路径校验用 effective_library_id = updates.get("library_id", series.library_id)：body 没传 library_id 时回退到 series 当前关联，避免改 path 时误判无 library。
+- PUT 显式改 library_id 时同步 library_name 冗余字段（None → None，非空 → 重查 library.name）。
+- GET 列表可选 ?library_id= 过滤，用 Query(default=None) + select.where 条件拼接。
+- 子路由自挂载 + main.py +1 import (T16 模式照抄)：`from app.api.v1 import series as _v1_series  # noqa: F401`。
+- 测试 fixture 与 T16 完全一致（覆写 file.allowed_browse_roots = [tmp_path]），series 测试先 POST /libraries 建 library 再测 series 路径校验。

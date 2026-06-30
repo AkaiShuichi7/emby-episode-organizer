@@ -1,0 +1,53 @@
+# Task 17: Series CRUD API — 验证证据
+
+## 文件创建
+- backend/app/schemas/series.py (SeriesBase / SeriesCreate / SeriesUpdate / SeriesResponse)
+- backend/app/api/v1/series.py (GET list / POST / GET {id} / PUT / DELETE)
+- backend/tests/api/test_series_api.py (14 测试)
+
+## 文件修改
+- backend/app/main.py: +1 行 `from app.api.v1 import series as _v1_series  # noqa: F401`
+
+## 验证命令与结果
+
+### pytest test_series_api.py
+```
+14 passed in 0.57s
+
+tests/api/test_series_api.py::test_get_series_returns_empty_list PASSED
+tests/api/test_series_api.py::test_post_series_creates_without_path PASSED
+tests/api/test_series_api.py::test_post_series_creates_when_paths_inside_library PASSED
+tests/api/test_series_api.py::test_post_series_rejects_staging_path_outside_library PASSED
+tests/api/test_series_api.py::test_post_series_rejects_target_path_outside_library PASSED
+tests/api/test_series_api.py::test_post_series_rejects_unknown_library_id PASSED
+tests/api/test_series_api.py::test_get_series_lists_created PASSED
+tests/api/test_series_api.py::test_get_series_filter_by_library_id PASSED
+tests/api/test_series_api.py::test_get_series_by_id_returns_detail PASSED
+tests/api/test_series_api.py::test_get_series_by_id_returns_404_when_not_found PASSED
+tests/api/test_series_api.py::test_put_series_updates_name PASSED
+tests/api/test_series_api.py::test_put_series_rejects_path_outside_library PASSED
+tests/api/test_series_api.py::test_delete_series_removes_it PASSED
+tests/api/test_series_api.py::test_delete_series_returns_404_when_not_found PASSED
+```
+
+### pytest -q (全量)
+```
+150 passed in 1.53s   (原 136 + 新增 14)
+```
+
+### ruff check .
+```
+All checks passed!
+```
+
+### mypy app
+```
+Success: no issues found in 28 source files
+```
+
+## 关键实现点
+- 路径校验: staging_path → safe_resolve(path, [Path(library.staging_root)])；target_path → safe_resolve(path, [Path(library.target_root)])；越界抛 400。
+- library_id 不存在 → 400；有路径但无 library_id → 400。
+- PUT 用 effective_library_id (body 未传取 series 当前值) 校验路径。
+- library_id 显式改动时同步 library_name。
+- 子路由自挂载: 文件底部 `api_v1_router.include_router(router)` + main.py +1 import 触发 (T16 模式)。
