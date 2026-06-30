@@ -1,0 +1,24 @@
+# Task 4: 数据库模型 - 验证证据
+
+## pytest tests/test_models.py -v
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 4 items
+
+tests/test_models.py::test_all_tables_created PASSED                     [ 25%]
+tests/test_models.py::test_task_unique_constraint PASSED                 [ 50%]
+tests/test_models.py::test_models_share_base PASSED                      [ 75%]
+tests/test_models.py::test_setting_json_value PASSED                     [100%]
+
+============================== 4 passed in 0.19s ===============================
+
+## ruff check .
+All checks passed!
+
+## mypy app
+Success: no issues found in 6 source files

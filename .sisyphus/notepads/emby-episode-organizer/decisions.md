@@ -40,3 +40,11 @@
 - `src/env.d.ts` 统一补 `.vue` 模块声明
 - `naive-ui/dist/preset.css` 用 alias 兜底到本地 shim，避免上游包缺文件导致构建炸掉
 - 原因: 骨架先跑通，再让后续任务接业务代码
+
+## D9: 异步 SQLAlchemy 2.0 模式
+- Base = DeclarativeBase 子类 (mypy strict 友好)
+- engine = create_async_engine(settings.database_url), SessionLocal = async_sessionmaker(expire_on_commit=False)
+- 建表: `async with eng.begin() as conn: await conn.run_sync(Base.metadata.create_all)`
+- init_db(target_engine=None) 默认用模块 engine, 测试注入内存库
+- main.py 用 lifespan(asynccontextmanager) 启动调 init_db, 不破坏 /health
+- 时间戳走 TimestampMixin (created_at/updated_at, default/onupdate=func.now())

@@ -42,3 +42,11 @@
 - Naive UI 当前安装包没有 `dist/preset.css` 实文件，构建时可用 Vite alias 做兼容
 - vitest 跑 `.vue` 需要 `@vitejs/plugin-vue`，否则会卡在 SFC 解析
 - ESLint `--ignore-path .gitignore` 会要求 frontend 目录自己也有 `.gitignore`
+
+## T4 数据库模型
+- 异步 SQLAlchemy 需 `sqlalchemy[asyncio]` extra (拉 greenlet)，否则运行报 "greenlet library is required"
+- mypy strict 下用 `class Base(DeclarativeBase)` 而非 `declarative_base()`（后者返回 Any，子类化报错）
+- mypy strict 下 JSON 列须写 `Mapped[dict[str, Any] | None]`，裸 dict 报 type-arg
+- ruff UP042: 枚举用 `enum.StrEnum`（Py3.12）而非 `(str, enum.Enum)`
+- init_db(target_engine) 可注入引擎，测试用 `sqlite+aiosqlite:///:memory:`
+- init_db.py 须 import models 触发表注册到 Base.metadata（加 noqa: F401）
