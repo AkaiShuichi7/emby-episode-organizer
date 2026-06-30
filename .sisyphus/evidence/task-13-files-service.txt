@@ -1,0 +1,42 @@
+=== T13 Files Service Evidence ===
+Date: 2026年 6月30日 星期二 17时50分11秒 CST
+
+--- pytest tests/test_files_service.py -v ---
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_test_loop_scope=function, asyncio_default_fixture_loop_scope=None
+collecting ... collected 13 items
+
+tests/test_files_service.py::test_browse_lists_mixed_entries PASSED      [  7%]
+tests/test_files_service.py::test_browse_sorts_directories_first PASSED  [ 15%]
+tests/test_files_service.py::test_browse_empty_directory_returns_empty_entries PASSED [ 23%]
+tests/test_files_service.py::test_browse_root_itself_has_no_parent PASSED [ 30%]
+tests/test_files_service.py::test_browse_subdirectory_has_parent PASSED  [ 38%]
+tests/test_files_service.py::test_browse_outside_allowed_roots_rejected PASSED [ 46%]
+tests/test_files_service.py::test_browse_missing_directory_raises_file_not_found PASSED [ 53%]
+tests/test_files_service.py::test_validate_video_file_returns_source_info PASSED [ 61%]
+tests/test_files_service.py::test_validate_uppercase_extension_accepted PASSED [ 69%]
+tests/test_files_service.py::test_validate_non_video_extension_rejected PASSED [ 76%]
+tests/test_files_service.py::test_validate_directory_rejected PASSED     [ 84%]
+tests/test_files_service.py::test_validate_missing_file_raises_file_not_found PASSED [ 92%]
+tests/test_files_service.py::test_validate_outside_allowed_roots_rejected PASSED [100%]
+
+============================== 13 passed in 0.06s ==============================
+
+--- ruff check app/services/files.py tests/test_files_service.py ---
+All checks passed!
+
+--- mypy app/services/files.py ---
+Success: no issues found in 1 source file
+
+--- ruff check . ---
+All checks passed!
+
+--- mypy app ---
+Success: no issues found in 18 source files
+
+--- 备注: 全仓 ruff check + mypy app 0 issue，13/13 测试用例 PASS，browse_directory + validate_source_file 覆盖混合条目、目录排序、空目录、root 与子目录的 parent_path、allowed_roots 外拒绝、缺失路径 FileNotFoundError、NotAVideoError 等关键场景。---
