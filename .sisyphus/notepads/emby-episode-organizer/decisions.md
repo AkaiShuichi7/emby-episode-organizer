@@ -48,3 +48,21 @@
 - init_db(target_engine=None) 默认用模块 engine, 测试注入内存库
 - main.py 用 lifespan(asynccontextmanager) 启动调 init_db, 不破坏 /health
 - 时间戳走 TimestampMixin (created_at/updated_at, default/onupdate=func.now())
+
+## D10: 路径安全策略 = 单一入口 + allow-list 白名单
+- 所有文件系统读写必须经过 `app.utils.path_security.safe_resolve` 校验，禁止业务层直接 `Path.resolve` 后信任。
+- `allowed_roots` 在业务侧由配置（`Libraries` 表）动态注入，传给 safe_resolve；空 allow-list 主动报错，避免默认放行。
+- symlink 不单独禁用，而是依赖 `resolve(strict=False)` 自动跟随 + allow-list 复核结果。
+- 原因: T5 OWASP Path Traversal 防护成本最低、误伤最小，同时为 T6 命名模板、T11 文件移动提供统一前置。
+
+## D11: sanitize 默认占位符 = `Untitled`
+- 当输入清洗后为空或仅剩 `_`/空格时，统一回落到 `Untitled`。
+- 原因: 避免剧集目录出现 `.`、空名、`___` 等不可点开/无法识别的占位。
+
+## D12: Kodi v12 episode NFO 字段约定
+- 根元素固定 `<episodedetails>`，与 Kodi movie `<movie>` 区分；Emby/Jellyfin 扫描器按根元素路由解析器。
+- 字段集对齐 Kodi v12 episode schema：`title/season/episode/plot/premiered/year/genre/tag/actor/director/studio/rating`，v1 不扩展。
+- 多值字段（`genre`/`tag`/`director`）展开为同名多个子元素（如 `<genre>剧情</genre><genre>科幻</genre>`），不放在容器里。
+- `actor` 单独成结构 `<actor><name/><role/></actor>`，role 缺省时不生成 `<role>` 标签。
+- XML 声明头：`<?xml version='1.0' encoding='UTF-8' standalone='yes'?>`，固定 standalone='yes' 兼容老 Kodi 解析器。
+- 原因: Kodi wiki episode NFO 是事实标准（Emby/Jellyfin 都吃这套），贴齐可避免自定义 schema 兼容性踩坑。

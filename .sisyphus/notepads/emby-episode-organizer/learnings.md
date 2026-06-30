@@ -50,3 +50,18 @@
 - ruff UP042: 枚举用 `enum.StrEnum`（Py3.12）而非 `(str, enum.Enum)`
 - init_db(target_engine) 可注入引擎，测试用 `sqlite+aiosqlite:///:memory:`
 - init_db.py 须 import models 触发表注册到 Base.metadata（加 noqa: F401）
+
+## T5 路径安全 + 文件名清理
+- `safe_resolve` 必须先 `expanduser().resolve(strict=False)` 再用 `is_relative_to` 校验；空 `allowed_roots` 直接拒。
+- symlink 安全 = 自动跟随 + 真实目标仍在 allow-list 内才算合法；测试用 `os.symlink` 在 tmp_path 外构造泄漏点。
+- `validate_inside_roots` 不抛异常，捕获 `OSError/RuntimeError` 兜底返回 `False`，避免边界 Path 触发未捕获异常。
+- `_finalize` 的"全为空"判定不只是 `collapsed or "Untitled"`；字符全为 `_`/空格（如 `///` → `___`）也要归为 `Untitled`。
+- 中文正则不需要白名单，sanitize 只换非法字符集合 `[\\/:*?"<>|]`，中文/英文/数字/连字符/括号/方括号天然保留。
+- `sanitize_series_name` 在 sanitize_filename 基础上多删 `.`，避免目录名被 OS 当成扩展名。
+
+## T7 NFO 构建/解析器
+- `xml.etree.ElementTree` 默认输出 `<?xml version='1.0' encoding='UTF-8'?>`，不带 `standalone='yes'`；Kodi 兼容要求补 `standalone='yes'`，故 `build_nfo_xml` 走 `tostring(encoding='unicode') + 手动声明头` 拼接。
+- "空字段不生成标签"语义集中在 `_maybe_add`（None/空串/列表跳过），build 里不散落判断。
+- round-trip 用 pydantic `BaseModel.__eq__` 即可，无需手写 `assert dict == dict`。
+- `_int_or_none` / `_float_or_none` 防御性 `try/except ValueError`，避免脏 NFO 拖垮上层；缺字段/解析失败统一返回 None。
+- mypy strict 下 `Optional[X]` 触发 ruff UP045（推荐 `X | None`），一次性 `--fix` 全转。

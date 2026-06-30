@@ -1,0 +1,40 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend/.venv/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /Users/akaishuichi/Developer/Other/python/emby-episode-organizer/backend
+configfile: pyproject.toml
+plugins: cov-7.1.1, anyio-4.14.1, asyncio-1.4.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 15 items
+
+tests/test_nfo.py::test_minimal_nfo_contains_only_required_tags PASSED   [  6%]
+tests/test_nfo.py::test_full_nfo_includes_all_populated_fields PASSED    [ 13%]
+tests/test_nfo.py::test_empty_plot_omitted_from_xml PASSED               [ 20%]
+tests/test_nfo.py::test_empty_genre_list_omitted_from_xml PASSED         [ 26%]
+tests/test_nfo.py::test_multiple_actors_produce_multiple_actor_tags PASSED [ 33%]
+tests/test_nfo.py::test_actor_without_role_omits_role_tag PASSED         [ 40%]
+tests/test_nfo.py::test_output_starts_with_xml_declaration PASSED        [ 46%]
+tests/test_nfo.py::test_root_element_is_episodedetails PASSED            [ 53%]
+tests/test_nfo.py::test_round_trip_minimal PASSED                        [ 60%]
+tests/test_nfo.py::test_round_trip_full PASSED                           [ 66%]
+tests/test_nfo.py::test_xml_escape_ampersand_in_title PASSED             [ 73%]
+tests/test_nfo.py::test_xml_escape_angle_brackets_in_title PASSED        [ 80%]
+tests/test_nfo.py::test_parse_minimal_xml_string PASSED                  [ 86%]
+tests/test_nfo.py::test_parse_full_xml_string_with_actors PASSED         [ 93%]
+tests/test_nfo.py::test_parse_preserves_unicode PASSED                   [100%]
+
+============================== 15 passed in 0.07s ==============================
+
+=== ruff check app/services tests/test_nfo.py ===
+All checks passed!
+
+=== ruff check . (whole backend) ===
+All checks passed!
+
+=== mypy app ===
+Success: no issues found in 13 source files
+
+=== Files created ===
+backend/app/services/__init__.py
+backend/app/services/nfo.py
+backend/tests/test_nfo.py
