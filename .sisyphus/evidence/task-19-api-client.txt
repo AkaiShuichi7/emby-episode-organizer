@@ -1,0 +1,25 @@
+# Task 19: API client + openapi-typescript - 验证证据
+
+## npm run test:unit -- --run
+✓ tests/api/client.spec.ts (5 tests) 7ms
+✓ src/__tests__/App.spec.ts (1 test) 11ms
+Test Files: 2 passed (2)
+     Tests: 6 passed (6)
+
+## npm run build
+✓ 2801 modules transformed
+dist/index.html 0.41 kB
+dist/assets/index-D_0R3suk.js 253.67 kB
+✓ built in 1.50s
+
+## openapi-typescript 生成
+✨ openapi-typescript 7.13.0
+🚀 http://localhost:8899/openapi.json → src/api/types.ts [108.7ms]
+types.ts: 1973 行, 含全部 backend endpoints
+
+## 5 测试覆盖
+- 构造 GET 请求
+- 序列化 POST JSON body
+- FormData multipart boundary 保留
+- ApiError 抛出带 message + detail
+- 2xx JSON 返回
