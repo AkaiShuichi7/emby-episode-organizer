@@ -1,0 +1,32 @@
+# Task 21: 路由 + 主布局 + 仪表盘页 - 验证证据
+
+## 交付
+- frontend/src/router/index.ts (重写, 7 路由, lazy load)
+- frontend/src/layouts/MainLayout.vue (154 行, NLayout + NMenu + NHeader)
+- frontend/src/views/Dashboard.vue (90 行, 4 NCard + NDataTable)
+- frontend/src/views/_Placeholder.vue (19 行, 占位)
+- frontend/src/views/HomeView.vue (删除)
+- frontend/src/App.vue (重写, 加 NLoadingBarProvider + MainLayout)
+- frontend/src/main.ts (已配 pinia + router)
+- frontend/tests/views/Dashboard.spec.ts (mock 4 stores)
+
+## npm run test:unit -- --run
+Test Files: 7 passed (7)
+     Tests: 11 passed (11)
+Duration: 1.11s
+
+## npm run build
+✓ 2801+ modules transformed
+dist/index.html 0.41 kB
+dist/assets/Dashboard-Dc5iN7zm.js 255.49 kB (gzip 70.53 kB)
+dist/assets/_Placeholder-DsZPhftc.js 0.32 kB
+✓ built in 1.84s
+
+## 7 路由
+/ → Dashboard
+/emby-settings → EmbySettings
+/libraries → LibraryMapping
+/series → SeriesConfig
+/organize → OrganizePage
+/tasks → TaskList
+/tasks/:id → TaskDetail
