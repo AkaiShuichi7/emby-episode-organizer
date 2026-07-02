@@ -1,0 +1,19 @@
+T20 Pinia stores 验证证据
+
+命令：cd frontend && npm run test:unit -- --run stores
+结果：PASS
+- tests/stores/settings.spec.ts (1 test)
+- tests/stores/libraries.spec.ts (1 test)
+- tests/stores/series.spec.ts (1 test)
+- tests/stores/tasks.spec.ts (1 test)
+- Test Files: 4 passed
+- Tests: 4 passed
+
+命令：cd frontend && npm run build
+结果：PASS
+- vue-tsc --noEmit 通过
+- vite build 通过
+
+LSP 诊断：PASS
+- frontend/src/stores: 0 diagnostics
+- frontend/tests/stores: 0 diagnostics

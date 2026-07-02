@@ -154,3 +154,9 @@
 - create 先校验 source_file_path 在 `file.allowed_browse_roots` 内且是视频，再写 staging 视频/NFO/可选封面；v1 状态简化为 `draft -> staged -> committed`，无 NFO 时保留 `draft`，有落盘产物后进 `staged`。
 - commit 不要盲信 `staging_cover_path` 非空；需只提交真实存在的 staging 文件，否则无封面任务会因缺失 thumb 路径提交失败。
 - files API 只包一层 HTTP 语义：`browse_directory` / `validate_source_file` 的 `PathSecurityError`、`FileNotFoundError`、`NotAVideoError` 统一转 400，响应直接透传 service 的 pydantic `model_dump(mode="json")`。
+
+## T20 Pinia stores
+- Pinia 统一用 setup store：`defineStore('name', () => { ref state + async actions + return })`。
+- store action 只调 `@/api/client` 的 `api.get/post/put/delete`，路径传 `/settings` 这类相对 API v1 路径，前缀由 client 拼接。
+- action 捕获错误后写 `error` 字段并返回 `null`，不向 UI 重抛；`loading` 在 `finally` 复位。
+- store 单测用 `setActivePinia(createPinia())` 隔离实例，用 `vi.mock('@/api/client')` mock api 方法。
