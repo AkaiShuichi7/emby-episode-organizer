@@ -18,3 +18,9 @@ test-logs/
 .sisyphus/drafts/
 .sisyphus/notepads/
 .sisyphus/plans/
+.sisyphus/evidence/
+*.egg-info/
+backend/emby_episode_organizer_backend.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

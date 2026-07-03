@@ -11,11 +11,13 @@
   HTTPException 400，资源不存在抛 404。
 """
 
+# pyright: reportCallInDefaultInitializer=false
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
@@ -23,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_settings_service
 from app.api.v1 import api_v1_router
+from app.config import settings as app_settings
 from app.db.models import Library
 from app.schemas.library import (
     LibraryCreate,
@@ -39,22 +42,27 @@ router = APIRouter(prefix="/libraries", tags=["libraries"])
 
 
 async def _resolve_allowed_roots(service: SettingsService) -> list[Path]:
-    """从 settings 服务读取 ``file.allowed_browse_roots`` 并解析为 ``Path`` 列表。
+    """从 settings 服务读取允许根目录，缺失时回退到环境配置。
 
     参数:
         service: 注入的设置服务实例。
 
     返回:
-        允许根目录列表；DB 中缺值或为空列表时返回空列表（空列表会让所有路径校验
-        失败，是预期的"未配置"语义）。
+        允许根目录列表；优先用 DB 中的 ``file.allowed_browse_roots``，否则回退到
+        ``ALLOWED_BROWSE_ROOTS`` 环境配置。
     """
 
-    raw = await service.get("file.allowed_browse_roots")
-    if not raw:
-        return []
-    if not isinstance(raw, list):
-        return []
-    return [Path(str(item)) for item in raw]
+    raw = cast(object | list[object] | None, await service.get("file.allowed_browse_roots"))
+    if isinstance(raw, list) and raw:
+        roots = cast(list[object], raw)
+        return [Path(str(item)) for item in roots]
+
+    env_value = app_settings.allowed_browse_roots
+    if env_value:
+        roots = cast(list[object], env_value)
+        return [Path(str(item)) for item in roots]
+
+    return []
 
 
 def _ensure_path_allowed(path: str, field_name: str, allowed_roots: list[Path]) -> None:
@@ -70,12 +78,17 @@ def _ensure_path_allowed(path: str, field_name: str, allowed_roots: list[Path]) 
     """
 
     if not allowed_roots:
+        env_roots = app_settings.allowed_browse_roots or []
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} 路径校验失败：未配置允许的根目录",
+            detail=(
+                f"{field_name} 路径校验失败：未配置允许的根目录。"
+                f"当前环境变量 ALLOWED_BROWSE_ROOTS={env_roots}。"
+                "请检查路径是否在该列表下，或在 .env 中调整 ALLOWED_BROWSE_ROOTS。"
+            ),
         )
     try:
-        safe_resolve(path, allowed_roots)
+        _ = safe_resolve(path, allowed_roots)
     except PathSecurityError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -204,13 +217,13 @@ async def update_library(
             detail=f"媒体库 {library_id} 不存在",
         )
 
-    updates: dict[str, Any] = dict(body.model_dump(exclude_unset=True))
+    updates: dict[str, str | bool | None] = dict(body.model_dump(exclude_unset=True))
     if "staging_root" in updates:
         allowed_roots = await _resolve_allowed_roots(service)
-        _ensure_path_allowed(updates["staging_root"], "staging_root", allowed_roots)
+        _ensure_path_allowed(str(updates["staging_root"]), "staging_root", allowed_roots)
     if "target_root" in updates:
         allowed_roots = await _resolve_allowed_roots(service)
-        _ensure_path_allowed(updates["target_root"], "target_root", allowed_roots)
+        _ensure_path_allowed(str(updates["target_root"]), "target_root", allowed_roots)
 
     for field, value in updates.items():
         setattr(library, field, value)

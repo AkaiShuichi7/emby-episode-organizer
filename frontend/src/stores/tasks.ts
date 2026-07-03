@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 
 export type TaskStatus = 'draft' | 'staged' | 'nfo_edited' | 'ready_to_commit' | 'committed' | 'failed' | 'cancelled'
 
@@ -72,6 +72,14 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败'
 }
 
+function getCreateTaskErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return 'DUPLICATE_TASK'
+  }
+
+  return getErrorMessage(error)
+}
+
 function withQuery(path: string, params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
@@ -93,14 +101,14 @@ export const useTasksStore = defineStore('tasks', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function run<T>(action: () => Promise<T>): Promise<T | null> {
+  async function run<T>(action: () => Promise<T>, toErrorMessage = getErrorMessage): Promise<T | null> {
     loading.value = true
     error.value = null
 
     try {
       return await action()
     } catch (caught) {
-      error.value = getErrorMessage(caught)
+      error.value = toErrorMessage(caught)
       return null
     } finally {
       loading.value = false
@@ -129,7 +137,7 @@ export const useTasksStore = defineStore('tasks', () => {
       tasks.value = [...tasks.value, task]
       currentTask.value = task
       return task
-    })
+    }, getCreateTaskErrorMessage)
   }
 
   async function updateNFO(id: number, nfoJson: Record<string, unknown>) {
@@ -170,11 +178,29 @@ export const useTasksStore = defineStore('tasks', () => {
     })
   }
 
+  async function cancelTask(id: number) {
+    return run(async () => {
+      const task = await api.post<Task>(`/tasks/${id}/cancel`)
+      currentTask.value = currentTask.value?.id === id ? task : currentTask.value
+      tasks.value = tasks.value.map((item) => (item.id === id ? task : item))
+      return task
+    })
+  }
+
   async function deleteTask(id: number) {
     return run(async () => {
       await api.delete<void>(`/tasks/${id}`)
       tasks.value = tasks.value.filter((item) => item.id !== id)
       if (currentTask.value?.id === id) currentTask.value = null
+    })
+  }
+
+  async function loadTask(id: number) {
+    return run(async () => {
+      const task = await api.get<Task>(`/tasks/${id}`)
+      currentTask.value = task
+      tasks.value = tasks.value.map((item) => (item.id === id ? task : item))
+      return task
     })
   }
 
@@ -185,12 +211,14 @@ export const useTasksStore = defineStore('tasks', () => {
     loading,
     error,
     loadTasks,
+    loadTask,
     previewTask,
     createTask,
     updateNFO,
     uploadCover,
     downloadCover,
     commitTask,
+    cancelTask,
     deleteTask,
   }
 })

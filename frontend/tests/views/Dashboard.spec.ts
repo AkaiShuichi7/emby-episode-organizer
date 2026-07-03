@@ -1,12 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import Dashboard from '@/views/Dashboard.vue'
 
-const mockLoadEmbyConfig = vi.fn()
+const mockLoadSettings = vi.fn()
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: () => ({
-    embyConfig: { url: 'http://localhost', api_key: '123' },
-    loadEmbyConfig: mockLoadEmbyConfig
+    allSettings: {
+      'emby.server_url': 'http://localhost',
+      'emby.api_key': '123'
+    },
+    loadSettings: mockLoadSettings
   })
 }))
 
@@ -35,25 +39,31 @@ vi.mock('@/stores/tasks', () => ({
 }))
 
 describe('Dashboard.vue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders 4 cards and calls load methods', async () => {
     const wrapper = mount(Dashboard, {
       global: {
         stubs: {
-          'n-grid': true,
-          'n-grid-item': true,
-          'n-card': true,
-          'n-spin': true,
-          'n-data-table': true,
-          'n-badge': true,
-          'n-space': true
+          'n-grid': { template: '<div><slot /></div>' },
+          'n-grid-item': { template: '<div><slot /></div>' },
+          'n-card': { props: ['title'], template: '<div class="n-card-header__main">{{ title }}<slot /></div>' },
+          'n-spin': { template: '<div><slot /></div>' },
+          'n-data-table': { template: '<div />' },
+          'n-badge': { template: '<div />' },
+          'n-space': { template: '<div><slot /></div>' }
         }
       }
     })
 
-    expect(mockLoadEmbyConfig).toHaveBeenCalled()
+    await flushPromises()
+
+    expect(mockLoadSettings).toHaveBeenCalled()
     expect(mockLoadLibraries).toHaveBeenCalled()
     expect(mockLoadSeries).toHaveBeenCalled()
-    expect(mockLoadTasks).toHaveBeenCalledWith({ status: 'staged' })
+    expect(mockLoadTasks).toHaveBeenCalledWith({})
 
     const cards = wrapper.findAll('.n-card-header__main')
     expect(cards.length).toBe(4)

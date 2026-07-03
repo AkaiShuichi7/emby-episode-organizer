@@ -130,7 +130,7 @@ class EmbyClient:
         path: str,
         *,
         params: dict[str, str | int] | None = None,
-    ) -> JsonDict:
+    ) -> JsonDict | list[JsonDict]:
         """发送 JSON 请求并把常见状态码映射为业务异常。
 
         Args:
@@ -177,15 +177,17 @@ class EmbyClient:
             raise EmbyConnectionError(f"Emby 响应异常: HTTP {response.status_code}")
 
         payload: object = response.json()  # pyright: ignore[reportAny]
-        if not isinstance(payload, dict):
-            logger.error("Emby JSON 响应不是对象: method=%s url=%s", method, url)
+        if not isinstance(payload, (dict, list)):
+            logger.error("Emby JSON 响应格式错误: method=%s url=%s", method, url)
             raise EmbyConnectionError("Emby JSON 响应格式错误")
 
-        return cast(JsonDict, payload)
+        return cast("JsonDict | list[JsonDict]", payload)
 
     @staticmethod
-    def _items(payload: JsonDict) -> list[JsonDict]:
+    def _items(payload: JsonDict | list[JsonDict]) -> list[JsonDict]:
         """提取列表响应里的 Items。"""
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
         items_obj = payload.get("Items", [])
         if not isinstance(items_obj, list):
             return []
@@ -228,9 +230,13 @@ class EmbyClient:
         return True
 
     async def get_libraries(self) -> list[EmbyLibrary]:
-        """获取 Emby 媒体库列表。"""
-        payload = await self._request_json("GET", "/Library/MediaFolders")
-        libraries = [EmbyLibrary.model_validate(item) for item in self._items(payload)]
+        """获取 Emby 媒体库列表。
+
+        /Library/VirtualFolders 返回裸数组而非 {Items: [...]}。
+        """
+        payload = await self._request_json("GET", "/Library/VirtualFolders")
+        raw_items = payload if isinstance(payload, list) else self._items(payload)
+        libraries = [EmbyLibrary.model_validate(item) for item in raw_items]
         logger.info("获取 Emby 媒体库成功: count=%d", len(libraries))
         return libraries
 

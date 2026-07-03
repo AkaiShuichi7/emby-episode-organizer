@@ -3,9 +3,13 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
+from pathlib import Path
+from typing import Annotated
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
 
 from app.api.deps import get_settings_service
 # 导入各 v1 子模块以触发模块底部的自挂载（include_router）
@@ -20,6 +24,8 @@ from app.config import settings
 from app.db.init_db import init_db
 from app.logging_config import setup_logging
 from app.services.settings import SettingsService
+
+_ = (_v1_settings, _v1_emby, _v1_libraries, _v1_series, _v1_tasks, _v1_files)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +49,8 @@ app.include_router(api_v1_router)
 
 @app.get("/health")
 async def health(
-    service: SettingsService = Depends(get_settings_service),
-) -> dict[str, Any]:
+    service: Annotated[SettingsService, Depends(get_settings_service)],
+) -> dict[str, bool | str]:
     """健康检查端点。
 
     返回三项状态：
@@ -70,3 +76,23 @@ async def health(
         "db_ok": db_ok,
         "emby_configured": emby_configured,
     }
+
+
+dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if dist_dir.is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="frontend")
+    logger.info("已挂载前端静态文件: %s", dist_dir)
+else:
+    logger.warning("前端构建产物 %s 未找到，跳过静态文件挂载", dist_dir)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def spa_or_api_not_found(request: Request, exc: StarletteHTTPException) -> JSONResponse | FileResponse:
+    """SPA fallback：非 API/health 的 404 返回 index.html，否则原样 JSON。"""
+    if exc.status_code == 404 and not request.url.path.startswith(("/api", "/health")):
+        index_file = dist_dir / "index.html"
+        if index_file.is_file():
+            return FileResponse(str(index_file), media_type="text/html")
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)

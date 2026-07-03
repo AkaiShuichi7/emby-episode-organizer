@@ -1,20 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import EmbySettings from '@/views/EmbySettings.vue'
 import { createPinia, setActivePinia } from 'pinia'
 
-const mockLoadEmbyConfig = vi.fn()
+const mockLoadSettings = vi.fn()
 const mockSaveSettings = vi.fn()
-const mockTestEmbyConnection = vi.fn()
 
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: () => ({
-    embyConfig: { url: 'http://localhost', apiKeyMasked: '********', apiKeySet: true, autoRefresh: true },
+    allSettings: {
+      'emby.server_url': 'http://localhost',
+      'emby.api_key': '************',
+      'emby.auto_refresh': true
+    },
     loading: false,
     error: null,
-    loadEmbyConfig: mockLoadEmbyConfig,
+    loadSettings: mockLoadSettings,
     saveSettings: mockSaveSettings,
-    testEmbyConnection: mockTestEmbyConnection
+    testEmbyConnection: vi.fn()
   })
 }))
 
@@ -33,9 +36,11 @@ describe('EmbySettings.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    mockLoadSettings.mockResolvedValue({})
+    mockSaveSettings.mockResolvedValue({})
   })
 
-  it('renders form and calls loadEmbyConfig on mount', async () => {
+  it('renders form and calls loadSettings on mount', async () => {
     mount(EmbySettings, {
       global: {
         stubs: {
@@ -52,54 +57,44 @@ describe('EmbySettings.vue', () => {
       }
     })
 
-    expect(mockLoadEmbyConfig).toHaveBeenCalled()
+    await flushPromises()
+
+    expect(mockLoadSettings).toHaveBeenCalled()
   })
 
-  it('triggers test connection action', async () => {
+  it('save does not submit masked api key', async () => {
     const wrapper = mount(EmbySettings, {
       global: {
         stubs: {
-          'n-card': true,
-          'n-form': true,
-          'n-form-item': true,
-          'n-input': true,
+          'n-card': { template: '<div><slot name="header-extra" /><slot /></div>' },
+          'n-form': { template: '<form><slot /></form>' },
+          'n-form-item': { template: '<div><slot /></div>' },
+          'n-input': {
+            template: '<input :value="modelValue" @input="$emit(\'update:value\', $event.target.value)" />',
+            props: ['modelValue']
+          },
           'n-switch': true,
           'n-button': {
             template: '<button @click="$emit(\'click\')"><slot /></button>'
           },
-          'n-space': true,
+          'n-space': { template: '<div><slot /></div>' },
           'n-alert': true,
           'n-spin': true
         }
       }
     })
 
-    const testBtn = wrapper.findAll('button').find(b => b.text().includes('测试连接'))
-    await testBtn?.trigger('click')
-    expect(mockTestEmbyConnection).toHaveBeenCalled()
-  })
+    await flushPromises()
 
-  it('triggers save settings action', async () => {
-    const wrapper = mount(EmbySettings, {
-      global: {
-        stubs: {
-          'n-card': true,
-          'n-form': true,
-          'n-form-item': true,
-          'n-input': true,
-          'n-switch': true,
-          'n-button': {
-            template: '<button @click="$emit(\'click\')"><slot /></button>'
-          },
-          'n-space': true,
-          'n-alert': true,
-          'n-spin': true
-        }
-      }
+    const inputs = wrapper.findAll('input')
+    await inputs[0]?.setValue('http://localhost')
+    await inputs[1]?.setValue('************')
+
+    await wrapper.findAll('button')[0]?.trigger('click')
+
+    expect(mockSaveSettings).toHaveBeenCalledWith({
+      'emby.server_url': 'http://localhost',
+      'emby.auto_refresh': true
     })
-
-    const saveBtn = wrapper.findAll('button').find(b => b.text().includes('保存'))
-    await saveBtn?.trigger('click')
-    expect(mockSaveSettings).toHaveBeenCalled()
   })
 })

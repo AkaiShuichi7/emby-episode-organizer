@@ -1,5 +1,8 @@
 <template>
-  <n-layout has-sider class="main-layout">
+  <n-layout
+    has-sider
+    class="main-layout"
+  >
     <n-layout-sider
       bordered
       collapse-mode="width"
@@ -17,11 +20,19 @@
       />
     </n-layout-sider>
     <n-layout>
-      <n-layout-header bordered class="header">
+      <n-layout-header
+        bordered
+        class="header"
+      >
         <div class="header-content">
-          <h2 class="page-title">{{ currentRouteTitle }}</h2>
+          <h2 class="page-title">
+            {{ currentRouteTitle }}
+          </h2>
           <div class="status-indicator">
-            <span class="status-dot" :class="{ 'is-connected': isEmbyConnected }"></span>
+            <span
+              class="status-dot"
+              :class="{ 'is-connected': isEmbyConnected }"
+            />
             <span class="status-text">{{ isEmbyConnected ? 'Emby 已连接' : 'Emby 未连接' }}</span>
           </div>
         </div>
@@ -38,7 +49,7 @@
  * 主布局组件
  * 包含左侧导航菜单、顶部状态栏和主内容区
  */
-import { computed, h } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
@@ -51,8 +62,14 @@ const settingsStore = useSettingsStore()
 const activeKey = computed(() => route.path)
 const currentRouteTitle = computed(() => route.meta.title as string || 'Emby Episode Organizer')
 
+onMounted(async () => {
+  await settingsStore.loadSettings()
+})
+
 const isEmbyConnected = computed(() => {
-  return !!(settingsStore.embyConfig?.url && settingsStore.embyConfig?.apiKeySet)
+  const url = settingsStore.allSettings['emby.server_url'] as string
+  const apiKey = settingsStore.allSettings['emby.api_key'] as string
+  return !!(url && apiKey)
 })
 
 const menuOptions: MenuOption[] = [

@@ -14,37 +14,37 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/emby-settings',
     name: 'EmbySettings',
-    component: () => import('@/views/_Placeholder.vue'),
+    component: () => import('@/views/EmbySettings.vue'),
     meta: { title: 'Emby 设置' }
   },
   {
     path: '/libraries',
     name: 'LibraryMapping',
-    component: () => import('@/views/_Placeholder.vue'),
+    component: () => import('@/views/LibraryMapping.vue'),
     meta: { title: '媒体库映射' }
   },
   {
     path: '/series',
     name: 'SeriesConfig',
-    component: () => import('@/views/_Placeholder.vue'),
+    component: () => import('@/views/SeriesConfig.vue'),
     meta: { title: '剧集配置' }
   },
   {
     path: '/organize',
     name: 'OrganizePage',
-    component: () => import('@/views/_Placeholder.vue'),
+    component: () => import('@/views/OrganizePage.vue'),
     meta: { title: '整理入库' }
   },
   {
     path: '/tasks',
     name: 'TaskList',
-    component: () => import('@/views/_Placeholder.vue'),
+    component: () => import('@/views/TaskList.vue'),
     meta: { title: '任务列表' }
   },
   {
     path: '/tasks/:id',
     name: 'TaskDetail',
-    component: () => import('@/views/_Placeholder.vue'),
+    component: () => import('@/views/TaskDetail.vue'),
     meta: { title: '任务详情' }
   }
 ]

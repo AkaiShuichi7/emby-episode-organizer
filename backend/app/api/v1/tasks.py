@@ -3,17 +3,31 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_settings_service
 from app.api.v1 import api_v1_router
+from app.config import settings as app_settings
+from app.db import SessionLocal
 from app.db.models import Series, Task, TaskStatus
 from app.schemas.task import (
     CoverDownloadRequest,
@@ -23,7 +37,7 @@ from app.schemas.task import (
     TaskPreviewResponse,
     TaskResponse,
 )
-from app.services.cover import ALLOWED_CONTENT_TYPES, download_cover
+from app.services.cover import ALLOWED_CONTENT_TYPES, MAX_COVER_SIZE, download_cover
 from app.services.files import validate_source_file
 from app.services.mover import FileConflictError, commit_to_target
 from app.services.nfo import NFOData, build_nfo_xml
@@ -53,12 +67,18 @@ class TaskPaths(NamedTuple):
 
 
 async def _resolve_allowed_roots(service: SettingsService) -> list[Path]:
-    """从 settings 读取允许浏览根目录。"""
+    """从 settings 读取允许浏览根目录，缺失时回退到环境变量 ``ALLOWED_BROWSE_ROOTS``。
+
+    优先级：DB → 环境变量（含默认值 ``['/data']``）。
+    """
 
     raw = await service.get("file.allowed_browse_roots")
-    if not isinstance(raw, list):
-        return []
-    return [Path(str(item)) for item in raw]
+    if isinstance(raw, list) and raw:
+        return [Path(str(item)) for item in raw]
+    env_value = getattr(app_settings, "allowed_browse_roots", None)
+    if isinstance(env_value, list) and env_value:
+        return [Path(str(item)) for item in env_value]
+    return []
 
 
 async def _get_series_or_404(db: AsyncSession, series_id: int) -> Series:
@@ -125,13 +145,21 @@ def _build_paths(
 
 
 def _build_nfo_payload(task: Task, raw_nfo_json: dict[str, Any]) -> NFOData:
-    """把字典校验为 NFOData。"""
+    """把字典校验为 NFOData，字符串类型的多值字段自动归一为列表。"""
+
+    # 字符串类型的多值字段："" → []，非空 → [value]
+    list_fields = ("genre", "tag", "director")
+    normalized: dict[str, Any] = dict(raw_nfo_json)
+    for field in list_fields:
+        value = normalized.get(field)
+        if isinstance(value, str):
+            normalized[field] = [value] if value.strip() else []
 
     merged = {
         "title": task.title or "",
         "season": task.season_number,
         "episode": task.episode_number,
-        **raw_nfo_json,
+        **normalized,
     }
     return NFOData.model_validate(merged)
 
@@ -150,6 +178,23 @@ def _collect_staging_files(task: Task) -> list[Path]:
     values = [task.staging_video_path, task.staging_nfo_path, task.staging_cover_path]
     files = [Path(item) for item in values if item]
     return [path for path in files if path.exists()]
+
+
+def _cleanup_task_staging(task: Task) -> None:
+    """删除任务对应的 staging 文件。"""
+
+    removed = 0
+    for field in (task.staging_video_path, task.staging_nfo_path, task.staging_cover_path):
+        if field is None:
+            continue
+        path = Path(field)
+        try:
+            path.unlink(missing_ok=True)
+            removed += 1
+        except OSError as exc:
+            logger.warning("删除 staging 文件失败: path=%s err=%s", path, exc)
+    if removed:
+        logger.info("清理 staging 文件: task_id=%s count=%d", task.id, removed)
 
 
 @router.get("", response_model=list[TaskResponse])
@@ -300,6 +345,17 @@ async def update_task_nfo(
     task = await db.get(Task, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"任务 {task_id} 不存在")
+    editable_statuses = {
+        TaskStatus.DRAFT,
+        TaskStatus.STAGED,
+        TaskStatus.NFO_EDITED,
+        TaskStatus.FAILED,
+    }
+    if task.status not in editable_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"当前状态 {task.status.value} 不允许编辑 NFO",
+        )
     if task.staging_nfo_path is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="任务未配置 staging NFO 路径")
 
@@ -334,7 +390,10 @@ async def upload_task_cover(
 
     target = Path(task.staging_cover_path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(await file.read())
+    content = await file.read()
+    if len(content) > MAX_COVER_SIZE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="封面上传超过 20MB 限制")
+    target.write_bytes(content)
     if task.status == TaskStatus.DRAFT:
         task.status = TaskStatus.STAGED
     await db.commit()
@@ -368,9 +427,60 @@ async def download_task_cover(
     return _serialize(task)
 
 
+@router.get("/{task_id}/cover/raw")
+async def get_task_cover_raw(task_id: int, db: AsyncSession = Depends(get_db)) -> FileResponse:
+    task = await db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"任务 {task_id} 不存在")
+
+    cover_path = task.staging_cover_path or task.target_cover_path
+    if not cover_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务未配置封面路径")
+
+    path = Path(cover_path)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="封面文件不存在")
+
+    media_type, _ = mimetypes.guess_type(str(path))
+    if not media_type:
+        media_type = "application/octet-stream"
+    return FileResponse(path, media_type=media_type)
+
+
+async def _commit_background(task_id: int, staging_files: list[Path], target_dir: Path) -> None:
+    """后台执行任务提交。"""
+
+    async with SessionLocal() as db:
+        task = await db.get(Task, task_id)
+        if task is None:
+            logger.error("后台提交失败: 任务 %d 不存在", task_id)
+            return
+
+        try:
+            await commit_to_target(staging_files, target_dir)
+            task.status = TaskStatus.COMMITTED
+            task.error_message = None
+            task.committed_at = datetime.now()
+            logger.info("后台提交任务成功: id=%s", task.id)
+        except FileConflictError as exc:
+            task.status = TaskStatus.FAILED
+            task.error_message = str(exc)
+            logger.warning("后台提交任务冲突: id=%s err=%s", task.id, exc)
+        except Exception as exc:
+            task.status = TaskStatus.FAILED
+            task.error_message = str(exc)
+            logger.error("后台提交任务异常: id=%s err=%s", task.id, exc)
+
+        await db.commit()
+
+
 @router.post("/{task_id}/commit", response_model=TaskResponse)
-async def commit_task(task_id: int, db: AsyncSession = Depends(get_db)) -> TaskResponse:
-    """提交任务到目标目录。"""
+async def commit_task(
+    task_id: int,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> TaskResponse:
+    """提交任务到目标目录（异步）。"""
 
     task = await db.get(Task, task_id)
     if task is None:
@@ -381,40 +491,57 @@ async def commit_task(task_id: int, db: AsyncSession = Depends(get_db)) -> TaskR
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="任务未配置目标视频路径")
 
     staging_files = _collect_staging_files(task)
-    try:
-        await commit_to_target(staging_files, Path(task.target_video_path).parent)
-    except FileConflictError as exc:
-        task.status = TaskStatus.FAILED
-        task.error_message = str(exc)
-        await db.commit()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except Exception as exc:
-        task.status = TaskStatus.FAILED
-        task.error_message = str(exc)
-        await db.commit()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    background_tasks.add_task(
+        _commit_background,
+        task.id,
+        staging_files,
+        Path(task.target_video_path).parent,
+    )
 
-    task.status = TaskStatus.COMMITTED
-    task.error_message = None
-    task.committed_at = datetime.now()
+    logger.info("已触发后台提交任务: id=%s", task.id)
+    return _serialize(task)
+
+
+@router.post("/{task_id}/cancel", response_model=TaskResponse)
+async def cancel_task(task_id: int, db: AsyncSession = Depends(get_db)) -> TaskResponse:
+    """取消未入库任务，并清理对应的 staging 文件。"""
+
+    task = await db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"任务 {task_id} 不存在")
+
+    cancellable = {
+        TaskStatus.DRAFT,
+        TaskStatus.STAGED,
+        TaskStatus.NFO_EDITED,
+        TaskStatus.FAILED,
+    }
+    if task.status not in cancellable:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"当前状态 {task.status.value} 不允许取消",
+        )
+
+    _cleanup_task_staging(task)
+    task.status = TaskStatus.CANCELLED
     await db.commit()
     await db.refresh(task)
-    logger.info("提交任务成功: id=%s", task.id)
+    logger.info("取消任务成功: id=%s", task_id)
     return _serialize(task)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)) -> Response:
-    """删除允许状态的任务。"""
+    """删除任务记录，仅删 DB 记录，staging 文件（如有）一并清理。"""
 
     task = await db.get(Task, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"任务 {task_id} 不存在")
-    if task.status not in {TaskStatus.DRAFT, TaskStatus.FAILED, TaskStatus.CANCELLED}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前状态不允许删除")
+
+    _cleanup_task_staging(task)
     await db.delete(task)
     await db.commit()
-    logger.info("删除任务成功: id=%s", task_id)
+    logger.info("删除任务成功: id=%s status=%s", task_id, task.status.value)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

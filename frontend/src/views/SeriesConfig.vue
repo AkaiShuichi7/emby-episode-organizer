@@ -15,7 +15,7 @@ import {
   useMessage,
   NPopconfirm
 } from 'naive-ui'
-import { useSeriesStore } from '@/stores/series'
+import { useSeriesStore, type EmbySeries, type Series } from '@/stores/series'
 import { useLibrariesStore } from '@/stores/libraries'
 import { api } from '@/api/client'
 
@@ -66,7 +66,7 @@ const handleSearch = async () => {
 const sanitizeSeriesName = (name: string) => {
   return name
     .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/\s+/g, ' ')
+    .replace(/\s+/g, '_')
     .trim()
     .replace(/\./g, '')
 }
@@ -92,7 +92,7 @@ const handleLibraryChange = (libraryId: number | null, form: typeof addForm.valu
   }
 }
 
-const openAddModal = (row: any) => {
+const openAddModal = (row: EmbySeries) => {
   addForm.value = {
     name: row.Name || '',
     emby_series_id: row.Id || '',
@@ -126,7 +126,7 @@ const submitAdd = async () => {
   }
 }
 
-const openEditModal = (row: any) => {
+const openEditModal = (row: Series) => {
   editForm.value = {
     id: row.id,
     name: row.name,
@@ -161,7 +161,7 @@ const submitEdit = async () => {
   }
 }
 
-const toggleEnabled = async (row: any) => {
+const toggleEnabled = async (row: Series) => {
   const success = await seriesStore.updateSeriesConfig(row.id, {
     enabled: !row.enabled
   })
@@ -171,24 +171,38 @@ const toggleEnabled = async (row: any) => {
   }
 }
 
-const deleteSeries = async (row: any) => {
+const deleteSeries = async (row: Series) => {
   try {
     await api.delete(`/series/${row.id}`)
     message.success('删除成功')
     await seriesStore.loadSeries()
-  } catch (e: any) {
-    message.error(e.message || '删除失败')
+  } catch (e: unknown) {
+    message.error(e instanceof Error ? e.message : '删除失败')
   }
 }
 
 const searchColumns = [
   { title: 'Emby ID', key: 'Id' },
   { title: '剧集名称', key: 'Name' },
+  { title: '媒体库', key: 'LibraryName' },
   { title: '年份', key: 'ProductionYear' },
+  {
+    title: '封面',
+    key: 'ImageTags',
+    render(row: EmbySeries) {
+      if (row.ImageTags && (row.ImageTags as Record<string, string>).Primary) {
+        return h('img', {
+          src: `/api/emby/items/${row.Id}/images/Primary?maxHeight=100`,
+          style: 'height: 50px; object-fit: cover; border-radius: 4px;'
+        })
+      }
+      return '无'
+    }
+  },
   {
     title: '操作',
     key: 'actions',
-    render(row: any) {
+    render(row: EmbySeries) {
       return h(
         NButton,
         {
@@ -212,7 +226,7 @@ const configColumns = [
   {
     title: '状态',
     key: 'enabled',
-    render(row: any) {
+    render(row: Series) {
       return h(
         NSwitch,
         {
@@ -225,7 +239,7 @@ const configColumns = [
   {
     title: '操作',
     key: 'actions',
-    render(row: any) {
+    render(row: Series) {
       return h(NSpace, {}, {
         default: () => [
           h(
@@ -262,7 +276,10 @@ const configColumns = [
 
 <template>
   <div class="series-config">
-    <n-space vertical size="large">
+    <n-space
+      vertical
+      size="large"
+    >
       <n-card title="搜索 Emby 剧集">
         <n-space>
           <n-input
@@ -275,7 +292,7 @@ const configColumns = [
             :loading="seriesStore.loading"
             @click="handleSearch"
           >
-            搜索
+            搜索 Emby
           </n-button>
         </n-space>
         
@@ -297,12 +314,27 @@ const configColumns = [
       </n-card>
     </n-space>
 
-    <n-modal v-model:show="showAddModal" preset="card" title="添加为配置" style="width: 600px">
-      <n-form :model="addForm" label-placement="left" label-width="100">
+    <n-modal
+      v-model:show="showAddModal"
+      preset="card"
+      title="添加为配置"
+      style="width: 600px"
+    >
+      <n-form
+        :model="addForm"
+        label-placement="left"
+        label-width="100"
+      >
         <n-form-item label="剧集名称">
-          <n-input v-model:value="addForm.name" readonly />
+          <n-input
+            v-model:value="addForm.name"
+            readonly
+          />
         </n-form-item>
-        <n-form-item label="媒体库" required>
+        <n-form-item
+          label="媒体库"
+          required
+        >
           <n-select
             v-model:value="addForm.library_id"
             :options="libraryOptions"
@@ -316,24 +348,46 @@ const configColumns = [
           <n-input v-model:value="addForm.target_path" />
         </n-form-item>
         <n-form-item label="默认季">
-          <n-input-number v-model:value="addForm.default_season" :min="1" />
+          <n-input-number
+            v-model:value="addForm.default_season"
+            :min="1"
+          />
         </n-form-item>
         <n-form-item label="启用">
           <n-switch v-model:value="addForm.enabled" />
         </n-form-item>
         <n-space justify="end">
-          <n-button @click="showAddModal = false">取消</n-button>
-          <n-button type="primary" @click="submitAdd">确定</n-button>
+          <n-button @click="showAddModal = false">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            @click="submitAdd"
+          >
+            确定
+          </n-button>
         </n-space>
       </n-form>
     </n-modal>
 
-    <n-modal v-model:show="showEditModal" preset="card" title="编辑配置" style="width: 600px">
-      <n-form :model="editForm" label-placement="left" label-width="100">
+    <n-modal
+      v-model:show="showEditModal"
+      preset="card"
+      title="编辑配置"
+      style="width: 600px"
+    >
+      <n-form
+        :model="editForm"
+        label-placement="left"
+        label-width="100"
+      >
         <n-form-item label="剧集名称">
           <n-input v-model:value="editForm.name" />
         </n-form-item>
-        <n-form-item label="媒体库" required>
+        <n-form-item
+          label="媒体库"
+          required
+        >
           <n-select
             v-model:value="editForm.library_id"
             :options="libraryOptions"
@@ -347,14 +401,24 @@ const configColumns = [
           <n-input v-model:value="editForm.target_path" />
         </n-form-item>
         <n-form-item label="默认季">
-          <n-input-number v-model:value="editForm.default_season" :min="1" />
+          <n-input-number
+            v-model:value="editForm.default_season"
+            :min="1"
+          />
         </n-form-item>
         <n-form-item label="启用">
           <n-switch v-model:value="editForm.enabled" />
         </n-form-item>
         <n-space justify="end">
-          <n-button @click="showEditModal = false">取消</n-button>
-          <n-button type="primary" @click="submitEdit">确定</n-button>
+          <n-button @click="showEditModal = false">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            @click="submitEdit"
+          >
+            确定
+          </n-button>
         </n-space>
       </n-form>
     </n-modal>

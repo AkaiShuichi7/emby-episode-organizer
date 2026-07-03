@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+import app.api.v1.tasks as tasks_module
 from app.api.deps import get_db
 from app.db import Base
 from app.db.models import Setting, Task, TaskStatus
@@ -62,6 +64,8 @@ async def client(
     """覆盖 ``get_db`` 到 in-memory，并把浏览根目录设为 ``tmp_path``。"""
 
     maker = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
+    original_session_local = tasks_module.SessionLocal
+    tasks_module.SessionLocal = maker
     allowed_roots = [str(tmp_path)]
 
     async def override_get_db() -> AsyncIterator[AsyncSession]:
@@ -83,6 +87,7 @@ async def client(
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+    tasks_module.SessionLocal = original_session_local
 
 
 async def _create_library(client: AsyncClient, tmp_path: Path) -> dict[str, Any]:
@@ -148,6 +153,19 @@ def _expected_paths(series: dict[str, Any], ext: str = ".mkv") -> dict[str, str]
         "target_nfo_path": str(Path(series["target_path"]) / season_dir / nfo_name),
         "target_cover_path": str(Path(series["target_path"]) / season_dir / thumb_name),
     }
+
+
+def _write_staging_files(paths: dict[str, str]) -> None:
+    """辅助：写入 staging 文件。"""
+
+    for key, content in (
+        ("staging_video_path", b"video"),
+        ("staging_nfo_path", b"<nfo />"),
+        ("staging_cover_path", b"cover"),
+    ):
+        path = Path(paths[key])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
 
 
 async def test_preview_returns_expected_paths(client: AsyncClient, tmp_path: Path) -> None:
@@ -290,6 +308,41 @@ async def test_update_nfo_writes_staging_nfo_file(client: AsyncClient, tmp_path:
     assert "已改" in text
 
 
+@pytest.mark.parametrize("transition,status_code", [("commit", 400), ("cancel", 400)])
+async def test_update_nfo_rejects_committed_and_cancelled_tasks(
+    client: AsyncClient,
+    tmp_path: Path,
+    transition: str,
+    status_code: int,
+) -> None:
+    """已提交与已取消任务不允许更新 NFO。"""
+
+    series = await _create_series(client, tmp_path)
+    source = tmp_path / "source" / "episode.mkv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"video")
+    create_response = await client.post(
+        "/api/v1/tasks",
+        json={**_paths_payload(series, source), "nfo_json": {"title": "启程", "season": 1, "episode": 2}},
+    )
+    task_id = create_response.json()["id"]
+
+    if transition == "commit":
+        transition_response = await client.post(f"/api/v1/tasks/{task_id}/commit")
+        assert transition_response.status_code == 200
+        await asyncio.sleep(0.1)
+    else:
+        transition_response = await client.post(f"/api/v1/tasks/{task_id}/cancel")
+        assert transition_response.status_code == 200
+
+    response = await client.put(
+        f"/api/v1/tasks/{task_id}/nfo",
+        json={"nfo_json": {"title": "新标题", "season": 1, "episode": 2}},
+    )
+
+    assert response.status_code == status_code
+
+
 async def test_cover_download_saves_cover_file(client: AsyncClient, tmp_path: Path) -> None:
     """``POST /api/v1/tasks/{id}/cover/download`` 下载封面到 staging。"""
 
@@ -360,9 +413,13 @@ async def test_commit_task_marks_committed(client: AsyncClient, tmp_path: Path) 
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == TaskStatus.COMMITTED.value
-    assert Path(body["target_video_path"]).exists()
-    assert Path(body["staging_video_path"]).exists() is False
+    assert body["status"] != TaskStatus.COMMITTED.value
+    await asyncio.sleep(0.1)
+    committed = await client.get(f"/api/v1/tasks/{task_id}")
+    committed_body = committed.json()
+    assert committed_body["status"] == TaskStatus.COMMITTED.value
+    assert Path(committed_body["target_video_path"]).exists()
+    assert Path(committed_body["staging_video_path"]).exists() is False
 
 
 async def test_commit_task_returns_409_when_already_committed(
@@ -382,9 +439,150 @@ async def test_commit_task_returns_409_when_already_committed(
 
     first = await client.post(f"/api/v1/tasks/{task_id}/commit")
     assert first.status_code == 200
+    await asyncio.sleep(0.1)
     second = await client.post(f"/api/v1/tasks/{task_id}/commit")
 
     assert second.status_code == 409
+
+
+@pytest.mark.parametrize("initial_status", [TaskStatus.DRAFT, TaskStatus.FAILED])
+async def test_cancel_direct_task_marks_cancelled(
+    client: AsyncClient,
+    tmp_path: Path,
+    test_engine: AsyncEngine,
+    initial_status: TaskStatus,
+) -> None:
+    """草稿与失败任务允许取消。"""
+
+    series = await _create_series(client, tmp_path)
+    expected = _expected_paths(series)
+    maker = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
+    async with maker() as session:
+        task = Task(
+            status=initial_status,
+            series_id=series["id"],
+            series_name=series["name"],
+            emby_series_id=series["emby_series_id"],
+            library_id=series["library_id"],
+            library_name=series["library_name"],
+            season_number=1,
+            episode_number=2,
+            title="启程",
+            source_file_path=str(tmp_path / "source" / "episode.mkv"),
+            staging_video_path=expected["staging_video_path"],
+            staging_nfo_path=expected["staging_nfo_path"],
+            staging_cover_path=expected["staging_cover_path"],
+            target_video_path=expected["target_video_path"],
+            target_nfo_path=expected["target_nfo_path"],
+            target_cover_path=expected["target_cover_path"],
+        )
+        session.add(task)
+        await session.commit()
+        await session.refresh(task)
+        task_id = task.id
+
+    response = await client.post(f"/api/v1/tasks/{task_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == TaskStatus.CANCELLED.value
+
+
+async def test_cancel_staged_task_marks_cancelled(client: AsyncClient, tmp_path: Path) -> None:
+    """暂存任务允许取消。"""
+
+    series = await _create_series(client, tmp_path)
+    expected = _expected_paths(series)
+    _write_staging_files(expected)
+    source = tmp_path / "source" / "episode.mkv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"video-data")
+    create_response = await client.post(
+        "/api/v1/tasks",
+        json={**_paths_payload(series, source), "nfo_json": {"title": "启程", "season": 1, "episode": 2}},
+    )
+    task_id = create_response.json()["id"]
+
+    response = await client.post(f"/api/v1/tasks/{task_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == TaskStatus.CANCELLED.value
+    assert not Path(expected["staging_video_path"]).exists()
+    assert not Path(expected["staging_nfo_path"]).exists()
+    assert not Path(expected["staging_cover_path"]).exists()
+
+
+async def test_cancel_committed_task_returns_400(client: AsyncClient, tmp_path: Path) -> None:
+    """已提交任务不可取消。"""
+
+    series = await _create_series(client, tmp_path)
+    source = tmp_path / "source" / "episode.mkv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"video-data")
+    create_response = await client.post(
+        "/api/v1/tasks",
+        json={**_paths_payload(series, source), "nfo_json": {"title": "启程", "season": 1, "episode": 2}},
+    )
+    task_id = create_response.json()["id"]
+    commit_response = await client.post(f"/api/v1/tasks/{task_id}/commit")
+    assert commit_response.status_code == 200
+    await asyncio.sleep(0.1)
+
+    response = await client.post(f"/api/v1/tasks/{task_id}/cancel")
+
+    assert response.status_code == 400
+
+
+async def test_cancel_missing_task_returns_404(client: AsyncClient) -> None:
+    """不存在任务取消返回 404。"""
+
+    response = await client.post("/api/v1/tasks/9999/cancel")
+
+    assert response.status_code == 404
+
+
+async def test_cover_raw_streams_staging_cover_file(client: AsyncClient, tmp_path: Path) -> None:
+    series = await _create_series(client, tmp_path)
+    source = tmp_path / "source" / "episode.mkv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"video")
+    create_response = await client.post(
+        "/api/v1/tasks",
+        json={**_paths_payload(series, source), "nfo_json": {"title": "启程", "season": 1, "episode": 2}},
+    )
+    task = create_response.json()
+    jpeg = _make_jpeg_bytes()
+    await client.post(
+        f"/api/v1/tasks/{task['id']}/cover/upload",
+        files={"file": ("cover.jpg", jpeg, "image/jpeg")},
+    )
+
+    response = await client.get(f"/api/v1/tasks/{task['id']}/cover/raw")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == jpeg
+
+
+async def test_cover_raw_returns_404_when_task_missing(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks/9999/cover/raw")
+
+    assert response.status_code == 404
+
+
+async def test_cover_raw_returns_404_when_cover_file_missing(client: AsyncClient, tmp_path: Path) -> None:
+    series = await _create_series(client, tmp_path)
+    source = tmp_path / "source" / "episode.mkv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"video")
+    create_response = await client.post(
+        "/api/v1/tasks",
+        json={**_paths_payload(series, source), "nfo_json": {"title": "启程", "season": 1, "episode": 2}},
+    )
+    task = create_response.json()
+
+    response = await client.get(f"/api/v1/tasks/{task['id']}/cover/raw")
+
+    assert response.status_code == 404
 
 
 async def test_delete_draft_task_returns_204(
@@ -394,6 +592,7 @@ async def test_delete_draft_task_returns_204(
 
     series = await _create_series(client, tmp_path)
     expected = _expected_paths(series)
+    _write_staging_files(expected)
     maker = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
     async with maker() as session:
         task = Task(
@@ -422,13 +621,62 @@ async def test_delete_draft_task_returns_204(
     response = await client.delete(f"/api/v1/tasks/{task_id}")
 
     assert response.status_code == 204
+    assert not Path(expected["staging_video_path"]).exists()
+    assert not Path(expected["staging_nfo_path"]).exists()
+    assert not Path(expected["staging_cover_path"]).exists()
     async with maker() as session:
         deleted = await session.get(Task, task_id)
         assert deleted is None
 
 
-async def test_delete_committed_task_returns_409(client: AsyncClient, tmp_path: Path) -> None:
-    """已提交任务不允许删除。"""
+async def test_delete_staged_task_returns_204(
+    client: AsyncClient, tmp_path: Path, test_engine: AsyncEngine
+) -> None:
+    """暂存任务允许删除并清理 staging 文件。"""
+
+    series = await _create_series(client, tmp_path)
+    expected = _expected_paths(series)
+    _write_staging_files(expected)
+    maker = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
+    async with maker() as session:
+        task = Task(
+            status=TaskStatus.DRAFT,
+            series_id=series["id"],
+            series_name=series["name"],
+            emby_series_id=series["emby_series_id"],
+            library_id=series["library_id"],
+            library_name=series["library_name"],
+            season_number=1,
+            episode_number=2,
+            title="启程",
+            source_file_path=str(tmp_path / "source" / "episode.mkv"),
+            staging_video_path=expected["staging_video_path"],
+            staging_nfo_path=expected["staging_nfo_path"],
+            staging_cover_path=expected["staging_cover_path"],
+            target_video_path=expected["target_video_path"],
+            target_nfo_path=expected["target_nfo_path"],
+            target_cover_path=expected["target_cover_path"],
+        )
+        session.add(task)
+        await session.commit()
+        await session.refresh(task)
+        task_id = task.id
+
+    response = await client.delete(f"/api/v1/tasks/{task_id}")
+
+    assert response.status_code == 204
+    assert not Path(expected["staging_video_path"]).exists()
+    assert not Path(expected["staging_nfo_path"]).exists()
+    assert not Path(expected["staging_cover_path"]).exists()
+    async with maker() as session:
+        deleted = await session.get(Task, task_id)
+        assert deleted is None
+
+
+async def test_delete_committed_task_returns_204(
+    client: AsyncClient, tmp_path: Path, test_engine: AsyncEngine
+) -> None:
+    """已提交任务也允许删除，只删 DB 记录。"""
 
     series = await _create_series(client, tmp_path)
     source = tmp_path / "source" / "episode.mkv"
@@ -439,9 +687,24 @@ async def test_delete_committed_task_returns_409(client: AsyncClient, tmp_path: 
         json={**_paths_payload(series, source), "nfo_json": {"title": "启程", "season": 1, "episode": 2}},
     )
     task_id = create_response.json()["id"]
+
     commit_response = await client.post(f"/api/v1/tasks/{task_id}/commit")
     assert commit_response.status_code == 200
+    await asyncio.sleep(0.1)
+
+    async with async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)() as session:
+        committed = await session.get(Task, task_id)
+        assert committed is not None
+        target_path = committed.target_video_path
+
+    assert target_path is not None
+    assert Path(target_path).exists()
 
     response = await client.delete(f"/api/v1/tasks/{task_id}")
 
-    assert response.status_code == 409
+    assert response.status_code == 204
+    assert Path(target_path).exists()
+    async with async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)() as session:
+        deleted = await session.get(Task, task_id)
+        assert deleted is None
+

@@ -20,9 +20,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_emby_config
+from app.api.deps import get_db, get_emby_config
 from app.api.v1 import api_v1_router
+from app.db.models import TaskStatus
 from app.services.emby import (
     EmbyAuthError,
     EmbyClient,
@@ -228,13 +231,14 @@ async def get_series_latest_episode(
     series_id: str,
     season_number: int,
     config: EmbyConfig | None = Depends(get_emby_config),
+    db: AsyncSession = Depends(get_db),
 ) -> JSONResponse | LatestEpisodeResponse:
     """推断指定剧集指定季的下一可用集号。
 
     返回:
         - 未配置 Emby → 400；
-        - 季内无分集 → ``{latest_episode: 0, next_episode: 1}``；
-        - 有分集 → ``{latest_episode: max, next_episode: max + 1}``。
+        - 季内无分集且本地无非终态任务 → ``{latest_episode: 0, next_episode: 1}``；
+        - 有分集或本地存在非终态任务 → ``{latest_episode: max, next_episode: max + 1}``。
     """
     if config is None:
         return _not_configured_response()
@@ -245,9 +249,40 @@ async def get_series_latest_episode(
     finally:
         await client.aclose()
 
-    if not episodes:
-        return LatestEpisodeResponse(latest_episode=0, next_episode=1)
-    latest = max(episode.IndexNumber for episode in episodes)
+    emby_latest = max((episode.IndexNumber for episode in episodes), default=0)
+
+    try:
+        result = await db.execute(
+            text(
+                "SELECT MAX(episode_number) AS max_episode "
+                "FROM tasks "
+                "WHERE emby_series_id = :sid "
+                "AND season_number = :season "
+                "AND status NOT IN (:committed, :cancelled)"
+            ),
+            {
+                "sid": series_id,
+                "season": season_number,
+                "committed": TaskStatus.COMMITTED.value,
+                "cancelled": TaskStatus.CANCELLED.value,
+            },
+        )
+        local_latest = result.scalar_one_or_none() or 0
+    except Exception:
+        # ponytail: 本地 tasks 查询失败时回退 Emby 最大集号，避免 latest 接口被 DB 问题拖死。
+        logger.warning("Emby 最新集号查询本地任务失败，回退 Emby 数据: series_id=%s season=%s", series_id, season_number, exc_info=True)
+        local_latest = 0
+
+    latest = max(emby_latest, local_latest)
+    logger.info(
+        "Emby 最新集号计算完成: series_id=%s season=%s emby_latest=%s local_latest=%s latest=%s next=%s",
+        series_id,
+        season_number,
+        emby_latest,
+        local_latest,
+        latest,
+        latest + 1,
+    )
     return LatestEpisodeResponse(latest_episode=latest, next_episode=latest + 1)
 
 

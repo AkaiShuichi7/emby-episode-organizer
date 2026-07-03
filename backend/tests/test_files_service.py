@@ -29,12 +29,12 @@ def _populate_source_root(root: Path) -> None:
 
     """
 
-    (root / "episode01.mp4").write_bytes(b"a" * 10)
-    (root / "episode02.mkv").write_bytes(b"b" * 20)
-    (root / "notes.txt").write_text("metadata", encoding="utf-8")
+    _ = (root / "episode01.mp4").write_bytes(b"a" * 10)
+    _ = (root / "episode02.mkv").write_bytes(b"b" * 20)
+    _ = (root / "notes.txt").write_text("metadata", encoding="utf-8")
     season_dir = root / "Season 01"
     season_dir.mkdir()
-    (season_dir / "inner.mp4").write_bytes(b"c" * 30)
+    _ = (season_dir / "inner.mp4").write_bytes(b"c" * 30)
 
 
 def test_browse_lists_mixed_entries(tmp_path: Path) -> None:
@@ -53,6 +53,7 @@ def test_browse_lists_mixed_entries(tmp_path: Path) -> None:
     ep1 = by_name["episode01.mp4"]
     assert ep1.is_dir is False
     assert ep1.is_video is True
+    assert ep1.path == tmp_path.resolve(strict=False) / "episode01.mp4"
     assert ep1.size == 10
     assert isinstance(ep1, BrowseEntry)
 
@@ -102,7 +103,7 @@ def test_browse_subdirectory_has_parent(tmp_path: Path) -> None:
 
     sub = tmp_path / "Season 01"
     sub.mkdir()
-    (sub / "ep.mp4").write_bytes(b"x" * 5)
+    _ = (sub / "ep.mp4").write_bytes(b"x" * 5)
 
     result = browse_directory(sub, [tmp_path])
 
@@ -114,10 +115,10 @@ def test_browse_outside_allowed_roots_rejected(tmp_path: Path) -> None:
 
     other_root = tmp_path / "elsewhere"
     other_root.mkdir()
-    (other_root / "a.mp4").write_bytes(b"x")
+    _ = (other_root / "a.mp4").write_bytes(b"x")
 
     with pytest.raises(PathSecurityError):
-        browse_directory(other_root, [tmp_path / "staging"])
+        _ = browse_directory(other_root, [tmp_path / "staging"])
 
 
 def test_browse_missing_directory_raises_file_not_found(tmp_path: Path) -> None:
@@ -126,14 +127,14 @@ def test_browse_missing_directory_raises_file_not_found(tmp_path: Path) -> None:
     ghost = tmp_path / "does_not_exist"
 
     with pytest.raises(FileNotFoundError):
-        browse_directory(ghost, [tmp_path])
+        _ = browse_directory(ghost, [tmp_path])
 
 
 def test_validate_video_file_returns_source_info(tmp_path: Path) -> None:
     """合法视频文件返回 :class:`SourceFileInfo`，字段与真实文件一致。"""
 
     target = tmp_path / "Episode01.mp4"
-    target.write_bytes(b"x" * 42)
+    _ = target.write_bytes(b"x" * 42)
 
     info = validate_source_file(target, [tmp_path])
 
@@ -148,7 +149,7 @@ def test_validate_uppercase_extension_accepted(tmp_path: Path) -> None:
     """扩展名大小写不敏感，``.MKV`` 仍被识别为视频。"""
 
     target = tmp_path / "movie.MKV"
-    target.write_bytes(b"y" * 8)
+    _ = target.write_bytes(b"y" * 8)
 
     info = validate_source_file(target, [tmp_path])
 
@@ -160,10 +161,10 @@ def test_validate_non_video_extension_rejected(tmp_path: Path) -> None:
     """非视频扩展名抛 :class:`NotAVideoError`。"""
 
     target = tmp_path / "notes.txt"
-    target.write_text("hello", encoding="utf-8")
+    _ = target.write_text("hello", encoding="utf-8")
 
     with pytest.raises(NotAVideoError):
-        validate_source_file(target, [tmp_path])
+        _ = validate_source_file(target, [tmp_path])
 
 
 def test_validate_directory_rejected(tmp_path: Path) -> None:
@@ -173,7 +174,7 @@ def test_validate_directory_rejected(tmp_path: Path) -> None:
     sub.mkdir()
 
     with pytest.raises(NotAVideoError):
-        validate_source_file(sub, [tmp_path])
+        _ = validate_source_file(sub, [tmp_path])
 
 
 def test_validate_missing_file_raises_file_not_found(tmp_path: Path) -> None:
@@ -182,18 +183,18 @@ def test_validate_missing_file_raises_file_not_found(tmp_path: Path) -> None:
     ghost = tmp_path / "missing.mp4"
 
     with pytest.raises(FileNotFoundError):
-        validate_source_file(ghost, [tmp_path])
+        _ = validate_source_file(ghost, [tmp_path])
 
 
 def test_validate_outside_allowed_roots_rejected(tmp_path: Path) -> None:
     """源文件路径不在 allowed_roots 时抛 :class:`PathSecurityError`。"""
 
     outside = tmp_path.parent / "outside.mp4"
-    outside.write_bytes(b"x")
+    _ = outside.write_bytes(b"x")
 
     try:
         with pytest.raises(PathSecurityError):
-            validate_source_file(outside, [tmp_path])
+            _ = validate_source_file(outside, [tmp_path])
     finally:
         if outside.exists():
             outside.unlink()

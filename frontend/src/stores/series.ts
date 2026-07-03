@@ -59,6 +59,11 @@ export interface EmbySeries {
   [key: string]: unknown
 }
 
+export interface LatestEpisode {
+  latest_episode: number
+  next_episode: number
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败'
 }
@@ -82,7 +87,7 @@ export const useSeriesStore = defineStore('series', () => {
   const currentSeries = ref<Series | null>(null)
   const seasons = ref<Season[]>([])
   const episodes = ref<Episode[]>([])
-  const latestEpisode = ref<Episode | null>(null)
+  const latestEpisode = ref<LatestEpisode | null>(null)
   const embySearchResults = ref<EmbySeries[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -111,7 +116,7 @@ export const useSeriesStore = defineStore('series', () => {
 
   async function loadEmbySeries(q: string) {
     return run(async () => {
-      const results = await api.get<EmbySeries[]>(withQuery('/emby/search', { q }))
+      const results = await api.get<EmbySeries[]>(withQuery('/emby/series/search', { keyword: q }))
       embySearchResults.value = results
       return results
     })
@@ -127,15 +132,15 @@ export const useSeriesStore = defineStore('series', () => {
 
   async function loadEpisodes(embySeriesId: string, season: number) {
     return run(async () => {
-      const loadedEpisodes = await api.get<Episode[]>(`/emby/series/${embySeriesId}/episodes?season=${season}`)
+      const loadedEpisodes = await api.get<Episode[]>(`/emby/series/${embySeriesId}/seasons/${season}/episodes`)
       episodes.value = loadedEpisodes
       return loadedEpisodes
     })
   }
 
-  async function loadLatestEpisode(embySeriesId: string) {
+  async function loadLatestEpisode(embySeriesId: string, season: number) {
     return run(async () => {
-      const episode = await api.get<Episode>(`/emby/series/${embySeriesId}/latest`)
+      const episode = await api.get<LatestEpisode>(`/emby/series/${embySeriesId}/seasons/${season}/latest`)
       latestEpisode.value = episode
       return episode
     })

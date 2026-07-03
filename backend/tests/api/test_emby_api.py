@@ -146,7 +146,7 @@ async def test_libraries_returns_two_libraries_when_configured(
         ]
     }
     with respx.mock(base_url=SERVER_URL) as mock:
-        route = mock.get("/Library/MediaFolders").respond(200, json=payload)
+        route = mock.get("/Library/VirtualFolders").respond(200, json=payload)
         response = await client_with_emby.get("/api/v1/emby/libraries")
 
     assert route.called
@@ -241,3 +241,88 @@ async def test_series_latest_returns_latest_and_next(client_with_emby: AsyncClie
     body = response.json()
     assert body["latest_episode"] == 3
     assert body["next_episode"] == 4
+
+
+async def test_series_latest_combines_local_tasks(
+    client_with_emby: AsyncClient,
+    test_engine: AsyncEngine,
+) -> None:
+    """本地存在更大集号的非终态任务时，next_episode 取本地 max + 1。"""
+    async with test_engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: sync_conn.exec_driver_sql(
+            "INSERT INTO tasks (status, emby_series_id, season_number, episode_number, title, "
+            "source_file_path, created_at, updated_at) "
+            "VALUES ('staged', 'series-1', 1, 8, 'ep8', '/x', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+
+    emby_payload = {
+        "Items": [
+            {"Id": f"ep-{i}", "IndexNumber": i, "Name": f"第{i}集", "SeriesId": "series-1"}
+            for i in range(1, 8)
+        ]
+    }
+    with respx.mock(base_url=SERVER_URL) as mock:
+        mock.get("/Shows/series-1/Episodes").respond(200, json=emby_payload)
+        response = await client_with_emby.get(
+            "/api/v1/emby/series/series-1/seasons/1/latest",
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["latest_episode"] == 8
+    assert body["next_episode"] == 9
+
+
+async def test_series_latest_ignores_committed_and_cancelled_local_tasks(
+    client_with_emby: AsyncClient,
+    test_engine: AsyncEngine,
+) -> None:
+    """committed / cancelled 任务不参与 max 计算。"""
+    async with test_engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: sync_conn.exec_driver_sql(
+            "INSERT INTO tasks (status, emby_series_id, season_number, episode_number, title, "
+            "source_file_path, created_at, updated_at) VALUES "
+            "('committed', 'series-1', 1, 9, 'ep9', '/x', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+            "('cancelled', 'series-1', 1, 10, 'ep10', '/x', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+
+    emby_payload = {
+        "Items": [
+            {"Id": f"ep-{i}", "IndexNumber": i, "Name": f"第{i}集", "SeriesId": "series-1"}
+            for i in range(1, 8)
+        ]
+    }
+    with respx.mock(base_url=SERVER_URL) as mock:
+        mock.get("/Shows/series-1/Episodes").respond(200, json=emby_payload)
+        response = await client_with_emby.get(
+            "/api/v1/emby/series/series-1/seasons/1/latest",
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["latest_episode"] == 7
+    assert body["next_episode"] == 8
+
+
+async def test_series_latest_no_emby_episodes_uses_local_max(
+    client_with_emby: AsyncClient,
+    test_engine: AsyncEngine,
+) -> None:
+    """Emby 季内无分集时，latest/next 仍由本地任务 max 决定。"""
+    async with test_engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: sync_conn.exec_driver_sql(
+            "INSERT INTO tasks (status, emby_series_id, season_number, episode_number, title, "
+            "source_file_path, created_at, updated_at) VALUES "
+            "('draft', 'series-1', 1, 1, 'ep1', '/x', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+
+    with respx.mock(base_url=SERVER_URL) as mock:
+        mock.get("/Shows/series-1/Episodes").respond(200, json={"Items": []})
+        response = await client_with_emby.get(
+            "/api/v1/emby/series/series-1/seasons/1/latest",
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["latest_episode"] == 1
+    assert body["next_episode"] == 2

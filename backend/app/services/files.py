@@ -34,6 +34,7 @@ class BrowseEntry(BaseModel):
 
     属性:
         name: 条目名称（不含父路径）。
+        path: 条目绝对路径，前端点击时传回后端用于导航。
         is_dir: 是否为目录。
         is_video: 是否为视频文件；目录恒为 ``False``。
         size: 文件字节数；目录也取 ``stat().st_size``，便于 UI 排序展示。
@@ -41,6 +42,7 @@ class BrowseEntry(BaseModel):
     """
 
     name: str
+    path: Path
     is_dir: bool
     is_video: bool
     size: int
@@ -80,6 +82,8 @@ class SourceFileInfo(BaseModel):
 class NotAVideoError(Exception):
     """源路径不是视频文件时抛出。"""
 
+    path: Path | None
+
     def __init__(self, message: str, *, path: Path | None = None) -> None:
         """构造异常。
 
@@ -110,6 +114,7 @@ def _build_entry(entry: Path) -> BrowseEntry:
     is_video = (not is_dir) and is_video_file(entry)
     return BrowseEntry(
         name=entry.name,
+        path=entry,
         is_dir=is_dir,
         is_video=is_video,
         size=stat.st_size,

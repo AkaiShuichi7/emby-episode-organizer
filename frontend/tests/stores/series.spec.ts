@@ -42,4 +42,18 @@ describe('series store', () => {
     expect(store.series).toEqual([seriesConfig])
     expect(store.error).toBeNull()
   })
+
+  it('搜索 Emby 剧集使用正确端点', async () => {
+    const searchResults = [
+      { Id: 'emby-1', Name: '孤独摇滚', ProductionYear: 2022 }
+    ]
+    apiMock.get.mockResolvedValue(searchResults)
+
+    const store = useSeriesStore()
+    await store.loadEmbySeries('摇滚')
+
+    expect(apiMock.get.mock.calls[0][0]).toMatch(/^\/emby\/series\/search\?keyword=.*$/)
+    expect(store.embySearchResults).toEqual(searchResults)
+    expect(store.error).toBeNull()
+  })
 })

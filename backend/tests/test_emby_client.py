@@ -56,17 +56,15 @@ async def test_connection_raises_connection_error_on_500() -> None:
 
 
 async def test_get_libraries_returns_two_libraries() -> None:
-    """媒体库列表接口返回 Items 并映射为 EmbyLibrary。"""
-    payload = {
-        "Items": [
-            {"ItemId": "lib-tv", "Name": "电视剧", "CollectionType": "tvshows"},
-            {"ItemId": "lib-anime", "Name": "动画", "CollectionType": "tvshows"},
-        ]
-    }
+    """媒体库列表接口返回裸数组并映射为 EmbyLibrary。"""
+    payload = [
+        {"ItemId": "lib-tv", "Name": "电视剧", "CollectionType": "tvshows"},
+        {"ItemId": "lib-anime", "Name": "动画", "CollectionType": "tvshows"},
+    ]
 
     async with httpx.AsyncClient(base_url="http://emby.local:8096") as http_client:
         with respx.mock(base_url="http://emby.local:8096") as mock:
-            _ = mock.get("/Library/MediaFolders").respond(200, json=payload)
+            _ = mock.get("/Library/VirtualFolders").respond(200, json=payload)
             client = EmbyClient("http://emby.local:8096", "secret", client=http_client)
 
             libraries = await client.get_libraries()
