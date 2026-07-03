@@ -20,7 +20,6 @@ WORKDIR /app
 
 COPY backend/ /app/backend
 COPY --from=frontend-builder /build/dist /app/frontend/dist
-COPY frontend/public /app/frontend/public
 
 WORKDIR /app/backend
 RUN pip install --no-cache-dir -e .
