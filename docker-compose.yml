@@ -13,6 +13,9 @@ services:
       - /path/to/media/anime:/media/anime
     environment:
       - TZ=Asia/Shanghai
+    env_file:
+      - ./.env
+      - ./config/.env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8899/health"]
