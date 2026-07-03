@@ -6,6 +6,7 @@ services:
       - "8899:8899"
     volumes:
       - ./config:/config
+      - ./data:/app/backend/data
       - ./logs:/logs
       - /path/to/downloads:/downloads
       - /path/to/staging:/staging
