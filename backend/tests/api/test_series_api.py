@@ -16,7 +16,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -48,7 +49,7 @@ async def test_engine() -> AsyncIterator[AsyncEngine]:
 
 @pytest.fixture
 async def client(
-    tmp_path, test_engine: AsyncEngine
+    tmp_path: Path, test_engine: AsyncEngine
 ) -> AsyncIterator[AsyncClient]:
     """覆盖 ``get_db`` 到 in-memory，并把 ``file.allowed_browse_roots`` 设为 ``tmp_path``。"""
 
@@ -65,7 +66,7 @@ async def client(
             )
             row = result.scalar_one_or_none()
             if row is not None:
-                row.value = allowed_roots
+                row.value = cast(Any, allowed_roots)
             else:
                 session.add(
                     Setting(key="file.allowed_browse_roots", value=allowed_roots)
@@ -81,7 +82,7 @@ async def client(
 
 
 async def _create_library(
-    client: AsyncClient, tmp_path: Any, name: str = "动画"
+    client: AsyncClient, tmp_path: Path, name: str = "动画"
 ) -> dict[str, Any]:
     """辅助：通过 POST /libraries 建一个 library，断言成功并返回响应体。"""
 
@@ -94,7 +95,7 @@ async def _create_library(
         },
     )
     assert resp.status_code == 201
-    return resp.json()
+    return cast(dict[str, Any], resp.json())
 
 
 async def test_get_series_returns_empty_list(client: AsyncClient) -> None:
@@ -126,7 +127,7 @@ async def test_post_series_creates_without_path(client: AsyncClient) -> None:
 
 
 async def test_post_series_creates_when_paths_inside_library(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST`` 当 staging_path / target_path 落在 library 根目录内时返回 201。"""
 
@@ -153,7 +154,7 @@ async def test_post_series_creates_when_paths_inside_library(
 
 
 async def test_post_series_rejects_staging_path_outside_library(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST`` 时 staging_path 落在 library.staging_root 之外返回 400。"""
 
@@ -175,7 +176,7 @@ async def test_post_series_rejects_staging_path_outside_library(
 
 
 async def test_post_series_rejects_target_path_outside_library(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST`` 时 target_path 落在 library.target_root 之外返回 400。"""
 
@@ -211,7 +212,7 @@ async def test_post_series_rejects_unknown_library_id(
 
 
 async def test_get_series_lists_created(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST`` 之后 ``GET /api/v1/series`` 能看到全部 series。"""
 
@@ -232,7 +233,7 @@ async def test_get_series_lists_created(
 
 
 async def test_get_series_filter_by_library_id(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``GET /api/v1/series?library_id=`` 只返回指定 library 下的 series。"""
 
@@ -299,7 +300,7 @@ async def test_put_series_updates_name(
 
 
 async def test_put_series_rejects_path_outside_library(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``PUT`` 时把 staging_path 改到 library 根目录之外返回 400。"""
 

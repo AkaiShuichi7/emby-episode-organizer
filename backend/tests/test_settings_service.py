@@ -6,6 +6,7 @@ EmbyConfig 读写、init_default_settings 幂等。
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -34,7 +35,7 @@ async def engine() -> AsyncEngine:
 
 
 @pytest.fixture
-async def session(engine: AsyncEngine) -> AsyncSession:
+async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """产出一个独立 AsyncSession 给被测服务。"""
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as s:

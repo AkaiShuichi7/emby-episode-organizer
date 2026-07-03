@@ -1,6 +1,9 @@
 """健康检查测试。"""
 
+# pyright: reportMissingSuperCall=false
+
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -41,7 +44,7 @@ async def test_health_falls_back_when_settings_unavailable(
         def __init__(self) -> None:  # noqa: D401 - test stub
             pass
 
-        async def get_emby_config(self):  # type: ignore[override]
+        async def get_emby_config(self) -> Any:
             raise RuntimeError("simulated DB failure")
 
     def broken_factory() -> SettingsService:

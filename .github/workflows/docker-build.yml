@@ -39,7 +39,7 @@ jobs:
         working-directory: backend
         run: |
           ruff check .
-          mypy .
+          mypy app/ tests/
 
       - name: Install frontend deps
         working-directory: frontend

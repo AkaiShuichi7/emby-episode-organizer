@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -45,7 +47,7 @@ async def test_engine() -> AsyncIterator[AsyncEngine]:
 
 @pytest.fixture
 async def client(
-    tmp_path, test_engine: AsyncEngine
+    tmp_path: Path, test_engine: AsyncEngine
 ) -> AsyncIterator[AsyncClient]:
     """覆盖 ``get_db`` 到 in-memory，并把 ``file.allowed_browse_roots`` 设为 ``tmp_path``。"""
     maker = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
@@ -60,7 +62,7 @@ async def client(
             )
             row = result.scalar_one_or_none()
             if row is not None:
-                row.value = allowed_roots
+                row.value = cast(Any, allowed_roots)
             else:
                 session.add(
                     Setting(key="file.allowed_browse_roots", value=allowed_roots)
@@ -84,7 +86,7 @@ async def test_get_libraries_returns_empty_list(client: AsyncClient) -> None:
 
 
 async def test_post_library_creates_when_paths_inside_allowed_roots(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST /api/v1/libraries`` 当 ``staging_root`` / ``target_root`` 在允许根内时返回 201。"""
     staging = tmp_path / "staging"
@@ -111,7 +113,7 @@ async def test_post_library_creates_when_paths_inside_allowed_roots(
 
 
 async def test_post_library_rejects_staging_root_outside_allowed_roots(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST`` 时 ``staging_root`` 落在允许根之外返回 400。"""
     outside = tmp_path.parent / "outside-staging"
@@ -128,7 +130,7 @@ async def test_post_library_rejects_staging_root_outside_allowed_roots(
 
 
 async def test_post_library_rejects_target_root_outside_allowed_roots(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``POST`` 时 ``target_root`` 落在允许根之外返回 400。"""
     outside = tmp_path.parent / "outside-target"
@@ -144,7 +146,7 @@ async def test_post_library_rejects_target_root_outside_allowed_roots(
     assert "target_root" in response.text or "不在允许" in response.text
 
 
-async def test_get_libraries_lists_created(client: AsyncClient, tmp_path) -> None:
+async def test_get_libraries_lists_created(client: AsyncClient, tmp_path: Path) -> None:
     """``POST`` 之后 ``GET /api/v1/libraries`` 能看到新建项。"""
     payload = {
         "name": "动画",
@@ -163,7 +165,7 @@ async def test_get_libraries_lists_created(client: AsyncClient, tmp_path) -> Non
 
 
 async def test_get_library_by_id_returns_detail(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``GET /api/v1/libraries/{id}`` 返回单个 library 详情。"""
     create_resp = await client.post(
@@ -193,7 +195,7 @@ async def test_get_library_by_id_returns_404_when_not_found(
     assert response.status_code == 404
 
 
-async def test_put_library_updates_name(client: AsyncClient, tmp_path) -> None:
+async def test_put_library_updates_name(client: AsyncClient, tmp_path: Path) -> None:
     """``PUT /api/v1/libraries/{id}`` 改名返回 200，再次 GET 看到新名字。"""
     create_resp = await client.post(
         "/api/v1/libraries",
@@ -218,7 +220,7 @@ async def test_put_library_updates_name(client: AsyncClient, tmp_path) -> None:
 
 
 async def test_put_library_rejects_path_outside_allowed_roots(
-    client: AsyncClient, tmp_path
+    client: AsyncClient, tmp_path: Path
 ) -> None:
     """``PUT`` 时把 ``staging_root`` 改到允许根之外返回 400，原值不变。"""
     create_resp = await client.post(
@@ -243,7 +245,7 @@ async def test_put_library_rejects_path_outside_allowed_roots(
     assert get_resp.json()["staging_root"] == original_staging
 
 
-async def test_delete_library_removes_it(client: AsyncClient, tmp_path) -> None:
+async def test_delete_library_removes_it(client: AsyncClient, tmp_path: Path) -> None:
     """``DELETE /api/v1/libraries/{id}`` 返回 204，之后 ``GET`` 列表为空。"""
     create_resp = await client.post(
         "/api/v1/libraries",

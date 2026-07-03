@@ -59,13 +59,14 @@ async def test_engine() -> AsyncIterator[AsyncEngine]:
 
 @pytest.fixture
 async def client(
-    tmp_path, test_engine: AsyncEngine
+    tmp_path: Path, test_engine: AsyncEngine
 ) -> AsyncIterator[AsyncClient]:
     """覆盖 ``get_db`` 到 in-memory，并把浏览根目录设为 ``tmp_path``。"""
 
     maker = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
-    original_session_local = tasks_module.SessionLocal
-    tasks_module.SessionLocal = maker
+    tasks_module_any = cast(Any, tasks_module)
+    original_session_local = tasks_module_any.SessionLocal
+    tasks_module_any.SessionLocal = maker
     allowed_roots = [str(tmp_path)]
 
     async def override_get_db() -> AsyncIterator[AsyncSession]:
@@ -87,7 +88,7 @@ async def client(
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
-    tasks_module.SessionLocal = original_session_local
+    tasks_module_any.SessionLocal = original_session_local
 
 
 async def _create_library(client: AsyncClient, tmp_path: Path) -> dict[str, Any]:
@@ -102,7 +103,7 @@ async def _create_library(client: AsyncClient, tmp_path: Path) -> dict[str, Any]
         },
     )
     assert response.status_code == 201
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 async def _create_series(client: AsyncClient, tmp_path: Path) -> dict[str, Any]:
@@ -122,7 +123,7 @@ async def _create_series(client: AsyncClient, tmp_path: Path) -> dict[str, Any]:
         },
     )
     assert response.status_code == 201
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 def _paths_payload(series: dict[str, Any], source_path: Path) -> dict[str, Any]:
@@ -707,4 +708,3 @@ async def test_delete_committed_task_returns_204(
     async with async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)() as session:
         deleted = await session.get(Task, task_id)
         assert deleted is None
-

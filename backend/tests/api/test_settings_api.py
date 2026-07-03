@@ -3,9 +3,12 @@
 覆盖：GET 默认值、PUT 写库回读、API Key mask、复杂 value、/health 扩展、DB 不可达兜底。
 """
 
+# pyright: reportMissingSuperCall=false
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -155,7 +158,7 @@ async def test_health_falls_back_when_settings_db_unavailable() -> None:
             # 故意不调 super()，避免触发 session 初始化
             pass
 
-        async def get_emby_config(self):  # type: ignore[override]
+        async def get_emby_config(self) -> Any:
             raise RuntimeError("simulated DB failure")
 
     def broken_factory() -> SettingsService:

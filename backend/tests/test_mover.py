@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-import app.services.mover as mover
 from app.services.mover import (
     DiskFullError,
     FileConflictError,
@@ -162,7 +161,7 @@ async def test_commit_to_target_size_mismatch_cleans_tmp_and_keeps_staging(
             _ = video.write_bytes(b"video-data-changed")
         return copied
 
-    monkeypatch.setattr(mover.shutil, "copy2", copy2_and_mutate)
+    monkeypatch.setattr(shutil, "copy2", copy2_and_mutate)
 
     with pytest.raises(DiskFullError):
         await commit_to_target([video], target_dir)

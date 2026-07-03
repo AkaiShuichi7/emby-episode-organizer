@@ -3,6 +3,8 @@
 验证 5 张表创建成功、Task 唯一约束、init_db 可重复执行。
 """
 
+from typing import cast
+
 import pytest
 from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
@@ -25,7 +27,9 @@ async def test_all_tables_created(engine: AsyncEngine) -> None:
     """init_db 后 5 张业务表全部存在。"""
 
     def _table_names(sync_conn: object) -> list[str]:
-        return inspect(sync_conn).get_table_names()
+        inspector = inspect(sync_conn)
+        assert inspector is not None
+        return cast(list[str], inspector.get_table_names())
 
     async with engine.connect() as conn:
         names = await conn.run_sync(_table_names)
