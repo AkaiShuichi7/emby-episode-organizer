@@ -106,3 +106,20 @@
 - 不再走 `app.config.settings.allowed_browse_roots`（pydantic-settings 启动加载）和 DB 双轨；统一 DB 为唯一可信源，运维改 settings API 立刻生效，无需重启。
 - `safe_resolve` 校验失败抛 HTTPException 400，detail 包含字段名（`staging_root` / `target_root`），前端按字段定位。
 - 原因: 与 D10 路径安全策略对齐；DB 作为运行时单一配置源，避免"环境变量改了但没重启导致数据库 vs 代码不一致"类问题。
+
+## D19: Libraries 白名单回退优先级 = DB → 环境变量
+- `POST/PUT /api/v1/libraries` 在 DB 的 `file.allowed_browse_roots` 为空时回退到 `ALLOWED_BROWSE_ROOTS` 环境配置。
+- 仅 libraries 端点保留该回退，用来修复首次启动或 settings 未初始化时的误拒绝；其它路径校验流程不变。
+- 原因: 库映射创建是用户最先遇到的入口，空 DB 不该覆盖已配置的环境白名单。这样既保留运行时 DB 覆盖能力，也兼容初始部署。
+
+## D20: 文件浏览空路径回退 = 首个允许根目录
+- `POST /api/v1/files/browse` 在前端未传初始路径时，自动把空路径映射到第一个允许根目录，再浏览其内容。
+- files API 的根目录解析顺序改成 DB → `ALLOWED_BROWSE_ROOTS` → 空列表，和 libraries 保持同一 fallback 语义。
+- 原因: 文件浏览对话框首开时没有已知目录，空路径不该直接报 400；默认展示第一个允许根目录更符合用户操作预期。
+
+## D21: 已提交 / 已取消任务禁止改 NFO
+- 前端 TaskDetail 只在 `draft/staged/nfo_edited/failed` 显示 NFOEditor。
+- 后端 `PUT /api/v1/tasks/{id}/nfo` 对 `committed/cancelled` 直接 400。
+- 原因: 防止已入库任务继续在暂存区生成新 NFO，前后端双层兜底。
+# 任务删除策略
+- 删除任务时不再按 status 拦截。统一允许删除所有状态，保留 staging 清理，COMMITTED 因 staging 已清空而自然无副作用。

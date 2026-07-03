@@ -16,9 +16,13 @@ test-config/
 test-logs/
 .sisyphus/boulder.json
 .sisyphus/drafts/
-.sisyphus/notepads/
 .sisyphus/plans/
 .sisyphus/evidence/
+# 项目知识（跨机器开发有用）：保留 notepads 里的 decisions/learnings/issues
+.sisyphus/notepads/**
+!.sisyphus/notepads/*/decisions.md
+!.sisyphus/notepads/*/learnings.md
+!.sisyphus/notepads/*/issues.md
 *.egg-info/
 backend/emby_episode_organizer_backend.egg-info/
 .pytest_cache/
